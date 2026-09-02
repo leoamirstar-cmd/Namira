@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -5,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 
 void main() {
   runApp(const NamiraApp());
@@ -55,33 +55,34 @@ bool _isLoading = false;
     setState(() {
       _language = lang;
     });
-      if (text.trim().isEmpty) return;
+}
+
+// تابع ارسال پیام (این تیکه رو اینجا اضافه کن)
+void _handleSendMessage(String text) async {
+  if (text.trim().isEmpty) return;
 
   setState(() {
     _isLoading = true;
-    _cancelToken = CancelToken(); // ساختن توکن جدید برای این درخواست
-    // اینجا پیام کاربر رو به لیست چت اضافه کن تا توی صفحه دیده بشه
+    _cancelToken = CancelToken();
   });
 
   try {
-    // صدا زدن کلاس هوشمندی که ساختیم (مسابقه مدل‌ها و چرخش کلیدها)
     String aiResponse = await _geminiManager.sendPromptRacing(
       prompt: text,
       cancelToken: _cancelToken!,
     );
 
     setState(() {
-      // اضافه کردن پاسخ جمنای به لیست چت
       _isLoading = false;
     });
   } catch (e) {
     setState(() {
       _isLoading = false;
     });
+    
     if (_cancelToken?.isCancelled == true) {
       print("درخواست توسط کاربر متوقف شد.");
     } else {
-      // نمایش خطا به کاربر
       print("خطا در ارتباط: $e");
     }
   }
@@ -94,7 +95,6 @@ void _cancelRequest() {
     _isLoading = false;
   });
 }
-  }
 
   @override
   Widget build(BuildContext context) {
