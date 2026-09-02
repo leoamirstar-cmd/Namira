@@ -35,5 +35,4 @@ jobs:
       with:
         name: namira-app
         path: build/app/outputs/flutter-apk/app-release.apk
-        path: build/app/outputs/flutter-apk/app-release.apk
         
