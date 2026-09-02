@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,7 +55,7 @@ class _NamiraAppState extends State<NamiraApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Namira AI',
+      title: 'Namira Hub',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       theme: ThemeData(
@@ -64,26 +63,14 @@ class _NamiraAppState extends State<NamiraApp> {
         primaryColor: const Color(0xFF2481CC),
         scaffoldBackgroundColor: const Color(0xFFFFFFFF),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2481CC), brightness: Brightness.light),
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          },
-        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF2B5278),
         scaffoldBackgroundColor: const Color(0xFF0E1621),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2B5278), brightness: Brightness.dark),
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          },
-        ),
       ),
-      home: ChatScreen(
+      home: MainSelectionScreen(
         onToggleTheme: _toggleTheme,
         onChangeLanguage: _changeLanguage,
         currentLanguage: _language,
@@ -93,6 +80,212 @@ class _NamiraAppState extends State<NamiraApp> {
   }
 }
 
+// صفحه اصلی برای انتخاب بین هوش مصنوعی و دانلود موزیک
+class MainSelectionScreen extends StatelessWidget {
+  final Function(bool) onToggleTheme;
+  final Function(String) onChangeLanguage;
+  final String currentLanguage;
+  final bool isDarkMode;
+
+  const MainSelectionScreen({
+    super.key,
+    required this.onToggleTheme,
+    required this.onChangeLanguage,
+    required this.currentLanguage,
+    required this.isDarkMode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: currentLanguage == 'fa' ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: isDarkMode ? const Color(0xFF0E1621) : const Color(0xFFF4F4F6),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.pinkAccent.withOpacity(0.6), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.pinkAccent.withOpacity(0.2),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      )
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      "assets/images/namira_avatar.png",
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Text('N', style: TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  currentLanguage == 'fa' ? 'به نامیرا هاب خوش آمدید' : 'Welcome to Namira Hub',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  currentLanguage == 'fa' ? 'لطفاً یکی از بخش‌های زیر را انتخاب کنید' : 'Please select a section below',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDarkMode ? Colors.white54 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                // دکمه ورود به هوش مصنوعی
+                _buildMenuCard(
+                  context,
+                  title: currentLanguage == 'fa' ? 'هوش مصنوعی نامیرا' : 'Namira AI Assistant',
+                  subtitle: currentLanguage == 'fa' ? 'چت و گفتگو با دستیار هوشمند' : 'Chat with smart assistant',
+                  icon: Icons.chat_bubble_rounded,
+                  color: const Color(0xFF2481CC),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(
+                          onToggleTheme: onToggleTheme,
+                          onChangeLanguage: onChangeLanguage,
+                          currentLanguage: currentLanguage,
+                          isDarkMode: isDarkMode,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                // دکمه ورود به بخش دانلود موزیک
+                _buildMenuCard(
+                  context,
+                  title: currentLanguage == 'fa' ? 'بخش دانلود موزیک' : 'Music Downloader',
+                  subtitle: currentLanguage == 'fa' ? 'جستجو و دانلود رایگان موزیک' : 'Search and download music',
+                  icon: Icons.music_note_rounded,
+                  color: Colors.pinkAccent,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MusicScreen(
+                          currentLanguage: currentLanguage,
+                          isDarkMode: isDarkMode,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(BuildContext context, {required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF17212B) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: isDarkMode ? Colors.white60 : Colors.black54)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, size: 16, color: isDarkMode ? Colors.white54 : Colors.black45),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// صفحه بخش موزیک (اسکلت اولیه برای استارت کار)
+class MusicScreen extends StatelessWidget {
+  final String currentLanguage;
+  final bool isDarkMode;
+
+  const MusicScreen({super.key, required this.currentLanguage, required this.isDarkMode});
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: currentLanguage == 'fa' ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: isDarkMode ? const Color(0xFF17212B) : Colors.pinkAccent,
+          title: Text(currentLanguage == 'fa' ? 'دانلود موزیک' : 'Music Downloader'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context), // دکمه برگشت امن به صفحه اصلی
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.headset_mic_rounded, size: 64, color: Colors.pinkAccent),
+              const SizedBox(height: 16),
+              Text(
+                currentLanguage == 'fa' ? 'بخش جستجو و دانلود موزیک به زودی...' : 'Music downloader coming soon...',
+                style: TextStyle(fontSize: 16, color: isDarkMode ? Colors.white70 : Colors.black54),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// صفحه چت هوش مصنوعی (همون ساختار قبلی بدون تغییر)
 class ChatScreen extends StatefulWidget {
   final Function(bool) onToggleTheme;
   final Function(String) onChangeLanguage;
@@ -111,13 +304,14 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
   List<ChatSessionModel> _sessions = [];
   late ChatSessionModel _currentSession;
   bool _isLoading = false;
+  bool _isInitLoaded = false;
 
   final GeminiManager _geminiManager = GeminiManager();
   CancelToken? _cancelToken;
@@ -141,11 +335,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     if (_sessions.isEmpty) {
-      _startNewChat();
+      _startNewChat(initOnly: true);
     } else {
       _currentSession = _sessions.first;
     }
-    setState(() {});
+    setState(() {
+      _isInitLoaded = true;
+    });
   }
 
   Future<void> _saveSessions() async {
@@ -153,7 +349,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     await prefs.setString('chat_sessions_v4', jsonEncode(_sessions.map((e) => e.toJson()).toList()));
   }
 
-  void _startNewChat() {
+  void _startNewChat({bool initOnly = false}) {
     final newSession = ChatSessionModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: widget.currentLanguage == 'fa' ? 'گفتگوی جدید' : 'New Chat',
@@ -164,7 +360,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _currentSession = newSession;
     });
     _saveSessions();
-    Navigator.pop(context);
+    if (!initOnly && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   void _selectSession(ChatSessionModel session) {
@@ -178,7 +376,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() {
       _sessions.removeWhere((s) => s.id == id);
       if (_sessions.isEmpty) {
-        _startNewChat();
+        _startNewChat(initOnly: true);
       } else if (_currentSession.id == id) {
         _currentSession = _sessions.first;
       }
@@ -189,7 +387,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _clearAllHistory() {
     setState(() {
       _sessions.clear();
-      _startNewChat();
+      _startNewChat(initOnly: true);
     });
   }
 
@@ -308,7 +506,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     onTap: () {
                       _clearAllHistory();
                       Navigator.pop(context);
-                      },
+                    },
                   ),
                 ],
               ),
@@ -326,11 +524,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: Colors.pinkAccent.withOpacity(0.5), width: 1.5),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2481CC), Colors.pinkAccent],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
       ),
       child: ClipOval(
         child: Image.asset(
@@ -346,11 +539,24 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitLoaded) {
+      return Scaffold(
+        backgroundColor: widget.isDarkMode ? const Color(0xFF0E1621) : Colors.white,
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF2481CC)),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: widget.currentLanguage == 'fa' ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: widget.isDarkMode ? const Color(0xFF17212B) : const Color(0xFF2481CC),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context), // بازگشت امن به صفحه انتخاب اصلی
+          ),
           title: Row(
             children: [
               _buildAvatar(),
@@ -415,7 +621,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ListTile(
                 leading: const Icon(Icons.add, color: Colors.blueAccent),
                 title: Text(widget.currentLanguage == 'fa' ? 'چت جدید' : 'New Chat'),
-                onTap: _startNewChat,
+                onTap: () => _startNewChat(),
               ),
               const Divider(),
               Padding(
