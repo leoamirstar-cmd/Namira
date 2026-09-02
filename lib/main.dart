@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/gemini_manager.dart';
 
@@ -42,9 +40,6 @@ class NamiraApp extends StatefulWidget {
 class _NamiraAppState extends State<NamiraApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   String _language = 'fa';
-final GeminiManager _geminiManager = GeminiManager();
-CancelToken? _cancelToken;
-bool _isLoading = false;
   
   void _toggleTheme(bool isDark) {
     setState(() {
@@ -56,46 +51,7 @@ bool _isLoading = false;
     setState(() {
       _language = lang;
     });
-}
-
-// تابع ارسال پیام (این تیکه رو اینجا اضافه کن)
-void _handleSendMessage(String text) async {
-  if (text.trim().isEmpty) return;
-
-  setState(() {
-    _isLoading = true;
-    _cancelToken = CancelToken();
-  });
-
-  try {
-    String aiResponse = await _geminiManager.sendPromptRacing(
-      prompt: text,
-      cancelToken: _cancelToken!,
-    );
-
-    setState(() {
-      _isLoading = false;
-    });
-  } catch (e) {
-    setState(() {
-      _isLoading = false;
-    });
-    
-    if (_cancelToken?.isCancelled == true) {
-      print("درخواست توسط کاربر متوقف شد.");
-    } else {
-      print("خطا در ارتباط: $e");
-    }
   }
-}
-
-// متدی که وقتی کاربر روی دکمه‌ی لغو/توقف میزنه صدا زده میشه
-void _cancelRequest() {
-  _cancelToken?.cancel("User cancelled the request");
-  setState(() {
-    _isLoading = false;
-  });
-}
 
   @override
   Widget build(BuildContext context) {
@@ -163,12 +119,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late ChatSessionModel _currentSession;
   bool _isLoading = false;
 
+  final GeminiManager _geminiManager = GeminiManager();
+  CancelToken? _cancelToken;
 
-  // آدرس تصویر سوم (آواتار اصلی نامیرا)
-  // لطفا فایل تصویری را در صورت نیاز با asset خود جایگزین کنید یا از NetworkImage زیر استفاده نمایید
   static const String _namiraAvatarAsset = "assets/images/namira_avatar.png"; 
-  // در صورتی که عکس را به صورت انلاین یا محلی لود می‌کنید:
-  // (از آیکن یا دایره با تصویر کانتینر استفاده می‌کنیم که خطا ندهد و همیشه شکیل باشد)
 
   @override
   void initState() {
@@ -239,12 +193,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
-  http.Client _createHttpClient() {
-    HttpClient httpClient = HttpClient();
-    httpClient.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    return IOClient(httpClient);
-  }
-
   Future<void> _sendMessage() async {
     String text = _controller.text.trim();
     if (text.isEmpty || _isLoading) return;
@@ -257,38 +205,27 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() {
       _currentSession.messages.add({"role": "user", "content": text});
       _isLoading = true;
+      _cancelToken = CancelToken();
     });
     _scrollToBottom();
 
     try {
-      final client = _createHttpClient();
-      final response = await client.post(
-        Uri.parse("$_apiUrl?key=$_apiKey"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "contents": [
-            {
-              "parts": [{"text": text}]
-            }
-          ]
-        }),
+      String aiResponse = await _geminiManager.sendPromptRacing(
+        prompt: text,
+        cancelToken: _cancelToken!,
       );
 
-      if (response.statusCode == 200) {
-        var data = jsonDecode(utf8.decode(response.bodyBytes));
-        String aiResponse = data["candidates"][0]["content"]["parts"][0]["text"];
-        setState(() {
-          _currentSession.messages.add({"role": "ai", "content": aiResponse});
-        });
+      setState(() {
+        _currentSession.messages.add({"role": "ai", "content": aiResponse});
+      });
+    } catch (e) {
+      if (_cancelToken?.isCancelled == true) {
+        print("درخواست توسط کاربر لغو شد.");
       } else {
         setState(() {
-          _currentSession.messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
+          _currentSession.messages.add({"role": "ai", "content": "خطای ارتباط: $e"});
         });
       }
-    } catch (e) {
-      setState(() {
-        _currentSession.messages.add({"role": "ai", "content": "خطای اتصال: لطفا اتصال شبکه خود را بررسی کنید ($e)"});
-      });
     } finally {
       setState(() {
         _isLoading = false;
@@ -296,6 +233,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _saveSessions();
       _scrollToBottom();
     }
+  }
+
+  void _cancelRequest() {
+    _cancelToken?.cancel("User cancelled the request");
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   void _scrollToBottom() {
@@ -350,7 +294,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         if (val != null) {
                           widget.onChangeLanguage(val);
                           setModalState(() {});
-                          }
+                        }
                       },
                     ),
                   ),
@@ -364,7 +308,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     onTap: () {
                       _clearAllHistory();
                       Navigator.pop(context);
-                    },
+                      },
                   ),
                 ],
               ),
@@ -614,8 +558,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Color(0xFF2481CC)),
-                      onPressed: _sendMessage,
+                      icon: Icon(
+                        _isLoading ? Icons.stop_circle_rounded : Icons.send_rounded,
+                        color: _isLoading ? Colors.redAccent : const Color(0xFF2481CC),
+                      ),
+                      onPressed: _isLoading ? _cancelRequest : _sendMessage,
                     ),
                   ],
                 ),
