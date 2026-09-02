@@ -114,9 +114,11 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _messages.add({"role": "ai", "content": aiResponse});
         });
-      } else {
-        setState(() {
-          _messages.add({"role": "ai", "content": "خطا در دریافت پاسخ از سرور."});
+                  } else {
+            setState(() {
+              _messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
+            });
+    
         });
       }
     } catch (e) {
