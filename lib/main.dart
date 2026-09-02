@@ -59,8 +59,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<Map<String, String>> _messages = [];
   bool _isLoading = false;
 
-  final String apiKey = "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";
-  final String apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+  // کلید اختصاصی جمینای
+  final String apiKey = "AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q";
+  // اندپوینت رسمی گوگل جمینای با مدل 3.7 Flash
+  final String apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
 
   @override
   void initState() {
@@ -97,20 +99,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse(apiUrl),
+        Uri.parse("$apiUrl?key=$apiKey"),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer $apiKey",
         },
         body: jsonEncode({
-        "model": "llama-3.1-8b-instant",
-          "messages": [{"role": "user", "content": text}]
+          "contents": [
+            {
+              "parts": [{"text": text}]
+            }
+          ]
         }),
       );
 
       if (response.statusCode == 200) {
         var data = jsonDecode(utf8.decode(response.bodyBytes));
-        String aiResponse = data["choices"][0]["message"]["content"];
+        String aiResponse = data["candidates"][0]["content"]["parts"][0]["text"];
         setState(() {
           _messages.add({"role": "ai", "content": aiResponse});
         });
