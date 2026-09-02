@@ -103,7 +103,7 @@ class _ChatScreenState extends State<ChatScreen> {
           "Authorization": "Bearer $apiKey",
         },
         body: jsonEncode({
-          "model": "llama3-70b-8192",
+          "model": "llama-3.3-70b-versatile",
           "messages": [{"role": "user", "content": text}]
         }),
       );
