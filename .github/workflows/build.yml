@@ -9,7 +9,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
     - name: Set up Java
       uses: actions/setup-java@v5
@@ -18,7 +19,7 @@ jobs:
         java-version: '17'
 
     - name: Set up Flutter
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@v2.18.0
       with:
         flutter-version: '3.19.0'
         channel: 'stable'
