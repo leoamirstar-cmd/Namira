@@ -19,10 +19,11 @@ class GeminiManager {
 
   // لیست مدل‌های مختلف جمنای برای مسابقه سرعت (Race)
   final List<String> _models = [
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-  ];
+  "gemini-3.6-flash",
+  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+];
 
   final Dio _dio = Dio();
 
