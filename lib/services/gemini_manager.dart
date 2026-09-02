@@ -17,7 +17,6 @@ class GeminiManager {
   int _currentKeyIndex = 0;
 
   final List<String> _models = [
-    "gemini-3.6-flash",
     "gemini-2.5-flash",
     "gemini-1.5-flash",
     "gemini-1.5-pro",
@@ -35,13 +34,15 @@ class GeminiManager {
     required String prompt,
     required CancelToken cancelToken,
   }) async {
-    final futures = _models.map((model) async {
+    // برای جلوگیری از فشردگی بیش از حد روی گوگل، مدل‌ها رو یکی یکی یا با مدیریت بهتری صدا می‌زنیم
+    for (String model in _models) {
       int attempts = 0;
-      while (attempts < 3) {
-        if (cancelToken.isCancelled) throw DioException(requestOptions: RequestOptions(path: ''), type: DioExceptionType.cancel);
+      while (attempts < 2) {
+        if (cancelToken.isCancelled) {
+          throw DioException(requestOptions: RequestOptions(path: ''), type: DioExceptionType.cancel);
+        }
         
         String apiKey = _getNextKey();
-        // اتصال مستقیم بدون واسطه کلادفلر
         String url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey";
 
         try {
@@ -53,26 +54,25 @@ class GeminiManager {
               }]
             },
             cancelToken: cancelToken,
+            options: Options(receiveTimeout: const Duration(seconds: 10)),
           );
 
           if (response.statusCode == 200) {
             var candidates = response.data['candidates'];
             if (candidates != null && candidates.isNotEmpty) {
-              return candidates[0]['content']['parts'][0]['text'].toString();
+              String text = candidates[0]['content']['parts'][0]['text'].toString();
+              if (text.isNotEmpty) return text;
             }
           }
         } on DioException catch (e) {
           if (e.type == DioExceptionType.cancel) rethrow;
-          attempts++;
-        }
+          // اگر ارور 429 (Too Many Requests) یا خطای لیمیت بود، سریعتر کلید بعدی رو تست میکنیم
+        } catch (_) {}
+        
+        attempts++;
       }
-      throw Exception("Model $model failed after retries.");
-    }).toList();
-
-    try {
-      return await Future.any(futures);
-    } catch (e) {
-      throw Exception("All models and keys failed or request cancelled.");
     }
+
+    throw Exception("All models and keys failed or request cancelled.");
   }
 }
