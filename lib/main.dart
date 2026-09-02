@@ -62,7 +62,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // کلید اختصاصی جمینای
   final String apiKey = "AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q";
   // اندپوینت رسمی گوگل جمینای با مدل 3.7 Flash
-  final String apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent";
+  final String apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
   @override
   void initState() {
