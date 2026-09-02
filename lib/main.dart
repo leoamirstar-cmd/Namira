@@ -64,12 +64,24 @@ class _NamiraAppState extends State<NamiraApp> {
         primaryColor: const Color(0xFF2481CC),
         scaffoldBackgroundColor: const Color(0xFFFFFFFF),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2481CC), brightness: Brightness.light),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF2B5278),
         scaffoldBackgroundColor: const Color(0xFF0E1621),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2B5278), brightness: Brightness.dark),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
       home: ChatScreen(
         onToggleTheme: _toggleTheme,
@@ -99,7 +111,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
@@ -110,6 +122,12 @@ class _ChatScreenState extends State<ChatScreen> {
   static const String _apiKey = "AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q";
   final String _apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
+  // آدرس تصویر سوم (آواتار اصلی نامیرا)
+  // لطفا فایل تصویری را در صورت نیاز با asset خود جایگزین کنید یا از NetworkImage زیر استفاده نمایید
+  static const String _namiraAvatarAsset = "assets/images/namira_avatar.png"; 
+  // در صورتی که عکس را به صورت انلاین یا محلی لود می‌کنید:
+  // (از آیکن یا دایره با تصویر کانتینر استفاده می‌کنیم که خطا ندهد و همیشه شکیل باشد)
+
   @override
   void initState() {
     super.initState();
@@ -118,7 +136,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _initSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? savedData = prefs.getString('chat_sessions_v3');
+    final String? savedData = prefs.getString('chat_sessions_v4');
     if (savedData != null) {
       List decoded = jsonDecode(savedData);
       setState(() {
@@ -136,7 +154,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _saveSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_sessions_v3', jsonEncode(_sessions.map((e) => e.toJson()).toList()));
+    await prefs.setString('chat_sessions_v4', jsonEncode(_sessions.map((e) => e.toJson()).toList()));
   }
 
   void _startNewChat() {
@@ -150,7 +168,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _currentSession = newSession;
     });
     _saveSessions();
-    Navigator.pop(context); // بستن منوی کشویی
+    Navigator.pop(context);
   }
 
   void _selectSession(ChatSessionModel session) {
@@ -160,10 +178,27 @@ class _ChatScreenState extends State<ChatScreen> {
     Navigator.pop(context);
   }
 
-  // ایجاد کلاینت HTTP با قابلیت عبور از محدودیت‌ها و پروکسی داخلی
+  void _deleteSession(String id) {
+    setState(() {
+      _sessions.removeWhere((s) => s.id == id);
+      if (_sessions.isEmpty) {
+        _startNewChat();
+      } else if (_currentSession.id == id) {
+        _currentSession = _sessions.first;
+      }
+    });
+    _saveSessions();
+  }
+
+  void _clearAllHistory() {
+    setState(() {
+      _sessions.clear();
+      _startNewChat();
+    });
+  }
+
   http.Client _createHttpClient() {
     HttpClient httpClient = HttpClient();
-    // در صورت نیاز به پروکسی اختصاصی می‌توان اینجا تنظیم کرد، به صورت پیش‌فرض از بای‌پس مستقیم امن استفاده می‌کند
     httpClient.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
     return IOClient(httpClient);
   }
@@ -210,7 +245,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       setState(() {
-        _currentSession.messages.add({"role": "ai", "content": "خطای اتصال (پروکسی/اینترنت): $e"});
+        _currentSession.messages.add({"role": "ai", "content": "خطای اتصال: لطفا اتصال شبکه خود را بررسی کنید ($e)"});
       });
     } finally {
       setState(() {
@@ -226,8 +261,8 @@ class _ChatScreenState extends State<ChatScreen> {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
         );
       }
     });
@@ -237,12 +272,12 @@ class _ChatScreenState extends State<ChatScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,9 +308,21 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (val != null) {
                           widget.onChangeLanguage(val);
                           setModalState(() {});
-                        }
+                          }
                       },
                     ),
+                  ),
+                  const Divider(height: 30),
+                  ListTile(
+                    leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                    title: Text(
+                      widget.currentLanguage == 'fa' ? 'پاک کردن کل تاریخچه' : 'Clear All History',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                    onTap: () {
+                      _clearAllHistory();
+                      Navigator.pop(context);
+                    },
                   ),
                 ],
               ),
@@ -283,6 +330,31 @@ class _ChatScreenState extends State<ChatScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildAvatar() {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.pinkAccent.withOpacity(0.5), width: 1.5),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2481CC), Colors.pinkAccent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          _namiraAvatarAsset,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Text('N', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ),
     );
   }
 
@@ -295,10 +367,7 @@ class _ChatScreenState extends State<ChatScreen> {
           backgroundColor: widget.isDarkMode ? const Color(0xFF17212B) : const Color(0xFF2481CC),
           title: Row(
             children: [
-              const CircleAvatar(
-                backgroundColor: Colors.white24,
-                child: Text('N', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
+              _buildAvatar(),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,7 +376,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     widget.currentLanguage == 'fa' ? 'دستیار نامیرا' : 'Namira Assistant',
                     style: const TextStyle(fontSize: 16, color: Colors.white),
                   ),
-                  const Text('online', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  const Text('online', style: TextStyle(fontSize: 11, color: Colors.white70)),
                 ],
               ),
             ],
@@ -325,15 +394,29 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: EdgeInsets.zero,
             children: [
               DrawerHeader(
-                decoration: BoxDecoration(color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFF2481CC)),
+                decoration: BoxDecoration(
+                  color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFF2481CC),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    const CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.white,
-                      child: Text('N', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2481CC))),
+                    Container(
+                      width: 55,
+                      height: 55,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          _namiraAvatarAsset,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Center(
+                            child: Text('N', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -344,8 +427,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.add, color: Colors.blue),
-                title: Text(widget.currentLanguage == 'fa' ? 'چت جدید (New Chat)' : 'New Chat'),
+                leading: const Icon(Icons.add, color: Colors.blueAccent),
+                title: Text(widget.currentLanguage == 'fa' ? 'چت جدید' : 'New Chat'),
                 onTap: _startNewChat,
               ),
               const Divider(),
@@ -359,7 +442,12 @@ class _ChatScreenState extends State<ChatScreen> {
               ..._sessions.map((session) => ListTile(
                     title: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis),
                     selected: session.id == _currentSession.id,
+                    selectedColor: const Color(0xFF2481CC),
                     onTap: () => _selectSession(session),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                      onPressed: () => _deleteSession(session.id),
+                    ),
                   )),
             ],
           ),
@@ -376,14 +464,32 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const CircleAvatar(
-                              radius: 45,
-                              backgroundColor: Color(0xFF2481CC),
-                              child: Text('N', style: TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.pinkAccent.withOpacity(0.2),
+                                    blurRadius: 15,
+                                    spreadRadius: 5,
+                                  )
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: Image.asset(
+                                  _namiraAvatarAsset,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Center(
+                                    child: Text('N', style: TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                                ),
+                              ),
                             ),
                             const SizedBox(height: 15),
                             Text(
-                              widget.currentLanguage == 'fa' ? 'سلام! امروز چطور می‌توانم کمکت کنم؟' : 'Hello! How can I help you today?',
+                              widget.currentLanguage == 'fa' ? 'سلام نفسم! چطور کمکت کنم؟' : 'Hello! How can I help?',
                               style: TextStyle(fontSize: 16, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
                             ),
                           ],
@@ -391,12 +497,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       )
                     : ListView.builder(
                         controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
                         itemCount: _currentSession.messages.length,
                         itemBuilder: (context, index) {
                           bool isUser = _currentSession.messages[index]["role"] == "user";
                           String content = _currentSession.messages[index]["content"]!;
-                          return Align(
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
                             alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                             child: GestureDetector(
                               onLongPress: () {
@@ -409,9 +517,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               },
                               child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                margin: const EdgeInsets.symmetric(vertical: 6),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                                 decoration: BoxDecoration(
                                   color: isUser
                                       ? (widget.isDarkMode ? const Color(0xFF2B5278) : const Color(0xFFEEFFDE))
@@ -424,9 +532,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 2,
-                                      offset: const Offset(0, 1),
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
                                     ),
                                   ],
                                 ),
@@ -435,6 +543,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   style: TextStyle(
                                     color: widget.isDarkMode ? Colors.white : Colors.black87,
                                     fontSize: 15,
+                                    height: 1.4,
                                   ),
                                 ),
                               ),
@@ -445,7 +554,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (_isLoading) const LinearProgressIndicator(color: Color(0xFF2481CC)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 color: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
                 child: Row(
                   children: [
@@ -463,7 +572,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.send, color: Color(0xFF2481CC)),
+                      icon: const Icon(Icons.send_rounded, color: Color(0xFF2481CC)),
                       onPressed: _sendMessage,
                     ),
                   ],
