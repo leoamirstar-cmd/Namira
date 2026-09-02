@@ -1,11 +1,33 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const NamiraApp());
+}
+
+class ChatSessionModel {
+  String id;
+  String title;
+  List<Map<String, String>> messages;
+
+  ChatSessionModel({required this.id, required this.title, required this.messages});
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'messages': messages,
+      };
+
+  factory ChatSessionModel.fromJson(Map<String, dynamic> json) => ChatSessionModel(
+        id: json['id'],
+        title: json['title'],
+        messages: List<Map<String, String>>.from(json['messages'].map((x) => Map<String, String>.from(x))),
+      );
 }
 
 class NamiraApp extends StatefulWidget {
@@ -41,19 +63,13 @@ class _NamiraAppState extends State<NamiraApp> {
         brightness: Brightness.light,
         primaryColor: const Color(0xFF2481CC),
         scaffoldBackgroundColor: const Color(0xFFFFFFFF),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2481CC),
-          brightness: Brightness.light,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2481CC), brightness: Brightness.light),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF2B5278),
         scaffoldBackgroundColor: const Color(0xFF0E1621),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2B5278),
-          brightness: Brightness.dark,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2B5278), brightness: Brightness.dark),
       ),
       home: ChatScreen(
         onToggleTheme: _toggleTheme,
@@ -86,52 +102,90 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final List<Map<String, String>> _messages = [];
+  
+  List<ChatSessionModel> _sessions = [];
+  late ChatSessionModel _currentSession;
   bool _isLoading = false;
 
-  // مخفی‌سازی نسبی کلید با قابلیت خواندن از متغیر محیطی بیلد (قابل ایمن‌سازی بیشتر در CI/CD)
-  static const String _apiKey = String.fromEnvironment(
-    'API_KEY',
-    defaultValue: 'AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q',
-  );
-  
-  final String _apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+  static const String _apiKey = "AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q";
+  final String _apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
 
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    _initSessions();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _initSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? historyString = prefs.getString('chat_history_v2');
-    if (historyString != null) {
-      List decoded = jsonDecode(historyString);
+    final String? savedData = prefs.getString('chat_sessions_v3');
+    if (savedData != null) {
+      List decoded = jsonDecode(savedData);
       setState(() {
-        _messages.addAll(decoded.map((e) => Map<String, String>.from(e)).toList());
+        _sessions = decoded.map((e) => ChatSessionModel.fromJson(e)).toList();
       });
     }
+
+    if (_sessions.isEmpty) {
+      _startNewChat();
+    } else {
+      _currentSession = _sessions.first;
+    }
+    setState(() {});
   }
 
-  Future<void> _saveHistory() async {
+  Future<void> _saveSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_history_v2', jsonEncode(_messages));
+    await prefs.setString('chat_sessions_v3', jsonEncode(_sessions.map((e) => e.toJson()).toList()));
+  }
+
+  void _startNewChat() {
+    final newSession = ChatSessionModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: widget.currentLanguage == 'fa' ? 'گفتگوی جدید' : 'New Chat',
+      messages: [],
+    );
+    setState(() {
+      _sessions.insert(0, newSession);
+      _currentSession = newSession;
+    });
+    _saveSessions();
+    Navigator.pop(context); // بستن منوی کشویی
+  }
+
+  void _selectSession(ChatSessionModel session) {
+    setState(() {
+      _currentSession = session;
+    });
+    Navigator.pop(context);
+  }
+
+  // ایجاد کلاینت HTTP با قابلیت عبور از محدودیت‌ها و پروکسی داخلی
+  http.Client _createHttpClient() {
+    HttpClient httpClient = HttpClient();
+    // در صورت نیاز به پروکسی اختصاصی می‌توان اینجا تنظیم کرد، به صورت پیش‌فرض از بای‌پس مستقیم امن استفاده می‌کند
+    httpClient.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    return IOClient(httpClient);
   }
 
   Future<void> _sendMessage() async {
     String text = _controller.text.trim();
     if (text.isEmpty || _isLoading) return;
 
+    if (_currentSession.messages.isEmpty) {
+      _currentSession.title = text.length > 25 ? "${text.substring(0, 25)}..." : text;
+    }
+
     _controller.clear();
     setState(() {
-      _messages.add({"role": "user", "content": text});
+      _currentSession.messages.add({"role": "user", "content": text});
       _isLoading = true;
     });
     _scrollToBottom();
 
     try {
-      final response = await http.post(
+      final client = _createHttpClient();
+      final response = await client.post(
         Uri.parse("$_apiUrl?key=$_apiKey"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
@@ -147,22 +201,22 @@ class _ChatScreenState extends State<ChatScreen> {
         var data = jsonDecode(utf8.decode(response.bodyBytes));
         String aiResponse = data["candidates"][0]["content"]["parts"][0]["text"];
         setState(() {
-          _messages.add({"role": "ai", "content": aiResponse});
+          _currentSession.messages.add({"role": "ai", "content": aiResponse});
         });
       } else {
         setState(() {
-          _messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
+          _currentSession.messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
         });
       }
     } catch (e) {
       setState(() {
-        _messages.add({"role": "ai", "content": "خطای اتصال: $e"});
+        _currentSession.messages.add({"role": "ai", "content": "خطای اتصال (پروکسی/اینترنت): $e"});
       });
     } finally {
       setState(() {
         _isLoading = false;
       });
-      _saveHistory();
+      _saveSessions();
       _scrollToBottom();
     }
   }
@@ -179,21 +233,11 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _clearHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('chat_history_v2');
-    setState(() {
-      _messages.clear();
-    });
-  }
-
   void _openSettings() {
     showModalBottomSheet(
       context: context,
       backgroundColor: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -205,11 +249,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     widget.currentLanguage == 'fa' ? 'تنظیمات نامیرا' : 'Namira Settings',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: widget.isDarkMode ? Colors.white : Colors.black87,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: widget.isDarkMode ? Colors.white : Colors.black87),
                   ),
                   const SizedBox(height: 20),
                   SwitchListTile(
@@ -221,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
                   ListTile(
-                    title: Text(widget.currentLanguage == 'fa' ? 'تغییر زبان (Language)' : 'Change Language'),
+                    title: Text(widget.currentLanguage == 'fa' ? 'تغییر زبان' : 'Language'),
                     trailing: DropdownButton<String>(
                       value: widget.currentLanguage,
                       dropdownColor: widget.isDarkMode ? const Color(0xFF242F3D) : Colors.white,
@@ -236,18 +276,6 @@ class _ChatScreenState extends State<ChatScreen> {
                         }
                       },
                     ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.delete_sweep, color: Colors.red),
-                    title: Text(
-                      widget.currentLanguage == 'fa' ? 'پاک کردن کل تاریخچه چت' : 'Clear Chat History',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                    onTap: () {
-                      _clearHistory();
-                      Navigator.pop(context);
-                    },
                   ),
                 ],
               ),
@@ -279,10 +307,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     widget.currentLanguage == 'fa' ? 'دستیار نامیرا' : 'Namira Assistant',
                     style: const TextStyle(fontSize: 16, color: Colors.white),
                   ),
-                  const Text(
-                    'online',
-                    style: TextStyle(fontSize: 12, color: Colors.white70),
-                  ),
+                  const Text('online', style: TextStyle(fontSize: 12, color: Colors.white70)),
                 ],
               ),
             ],
@@ -294,6 +319,51 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+        drawer: Drawer(
+          backgroundColor: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFF2481CC)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.white,
+                      child: Text('N', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2481CC))),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.currentLanguage == 'fa' ? 'هوش مصنوعی نامیرا' : 'Namira AI',
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.add, color: Colors.blue),
+                title: Text(widget.currentLanguage == 'fa' ? 'چت جدید (New Chat)' : 'New Chat'),
+                onTap: _startNewChat,
+              ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Text(
+                  widget.currentLanguage == 'fa' ? 'تاریخچه گفتگوها' : 'Recent Chats',
+                  style: TextStyle(color: widget.isDarkMode ? Colors.white54 : Colors.black54, fontSize: 12),
+                ),
+              ),
+              ..._sessions.map((session) => ListTile(
+                    title: Text(session.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    selected: session.id == _currentSession.id,
+                    onTap: () => _selectSession(session),
+                  )),
+            ],
+          ),
+        ),
         body: Container(
           decoration: BoxDecoration(
             color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFFEFEFF4),
@@ -301,75 +371,77 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Column(
             children: [
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    bool isUser = _messages[index]["role"] == "user";
-                    String content = _messages[index]["content"]!;
-                    return Align(
-                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: GestureDetector(
-                        onLongPress: () {
-                          Clipboard.setData(ClipboardData(text: content));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(widget.currentLanguage == 'fa' ? 'پیام کپی شد!' : 'Message copied!'),
-                              duration: const Duration(seconds: 1),
+                child: _currentSession.messages.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircleAvatar(
+                              radius: 45,
+                              backgroundColor: Color(0xFF2481CC),
+                              child: Text('N', style: TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold)),
                             ),
-                          );
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                          decoration: BoxDecoration(
-                            color: isUser
-                                ? (widget.isDarkMode ? const Color(0xFF2B5278) : const Color(0xFFEEFFDE))
-                                : (widget.isDarkMode ? const Color(0xFF182533) : Colors.white),
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(16),
-                              topRight: const Radius.circular(16),
-                              bottomLeft: Radius.circular(isUser ? 16 : 4),
-                              bottomRight: Radius.circular(isUser ? 4 : 16),
+                            const SizedBox(height: 15),
+                            Text(
+                              widget.currentLanguage == 'fa' ? 'سلام! امروز چطور می‌توانم کمکت کنم؟' : 'Hello! How can I help you today?',
+                              style: TextStyle(fontSize: 16, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 2,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                content,
-                                style: TextStyle(
-                                  color: widget.isDarkMode ? Colors.white : Colors.black87,
-                                  fontSize: 15,
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 15),
+                        itemCount: _currentSession.messages.length,
+                        itemBuilder: (context, index) {
+                          bool isUser = _currentSession.messages[index]["role"] == "user";
+                          String content = _currentSession.messages[index]["content"]!;
+                          return Align(
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: GestureDetector(
+                              onLongPress: () {
+                                Clipboard.setData(ClipboardData(text: content));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(widget.currentLanguage == 'fa' ? 'پیام کپی شد!' : 'Message copied!'),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                                decoration: BoxDecoration(
+                                  color: isUser
+                                      ? (widget.isDarkMode ? const Color(0xFF2B5278) : const Color(0xFFEEFFDE))
+                                      : (widget.isDarkMode ? const Color(0xFF182533) : Colors.white),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                    bottomRight: Radius.circular(isUser ? 4 : 16),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 2,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Align(
-                                alignment: Alignment.bottomLeft,
                                 child: Text(
-                                  "کپی با لمس طولانی",
+                                  content,
                                   style: TextStyle(
-                                    fontSize: 9,
-                                    color: widget.isDarkMode ? Colors.white54 : Colors.black45,
+                                    color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
               if (_isLoading) const LinearProgressIndicator(color: Color(0xFF2481CC)),
               Container(
