@@ -28,6 +28,7 @@ jobs:
     - name: Create Standard Flutter Project Structure
       run: |
         flutter create . --org org.namira --project-name namira --platforms android
+        sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
     - name: Install Dependencies
       run: flutter pub get
