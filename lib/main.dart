@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 
 void main() {
   runApp(const NamiraApp());
@@ -40,7 +41,10 @@ class NamiraApp extends StatefulWidget {
 class _NamiraAppState extends State<NamiraApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   String _language = 'fa';
-
+final GeminiManager _geminiManager = GeminiManager();
+CancelToken? _cancelToken;
+bool _isLoading = false;
+  
   void _toggleTheme(bool isDark) {
     setState(() {
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
@@ -51,6 +55,45 @@ class _NamiraAppState extends State<NamiraApp> {
     setState(() {
       _language = lang;
     });
+      if (text.trim().isEmpty) return;
+
+  setState(() {
+    _isLoading = true;
+    _cancelToken = CancelToken(); // ساختن توکن جدید برای این درخواست
+    // اینجا پیام کاربر رو به لیست چت اضافه کن تا توی صفحه دیده بشه
+  });
+
+  try {
+    // صدا زدن کلاس هوشمندی که ساختیم (مسابقه مدل‌ها و چرخش کلیدها)
+    String aiResponse = await _geminiManager.sendPromptRacing(
+      prompt: text,
+      cancelToken: _cancelToken!,
+    );
+
+    setState(() {
+      // اضافه کردن پاسخ جمنای به لیست چت
+      _isLoading = false;
+    });
+  } catch (e) {
+    setState(() {
+      _isLoading = false;
+    });
+    if (_cancelToken?.isCancelled == true) {
+      print("درخواست توسط کاربر متوقف شد.");
+    } else {
+      // نمایش خطا به کاربر
+      print("خطا در ارتباط: $e");
+    }
+  }
+}
+
+// متدی که وقتی کاربر روی دکمه‌ی لغو/توقف میزنه صدا زده میشه
+void _cancelRequest() {
+  _cancelToken?.cancel("User cancelled the request");
+  setState(() {
+    _isLoading = false;
+  });
+}
   }
 
   @override
