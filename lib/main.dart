@@ -114,11 +114,9 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _messages.add({"role": "ai", "content": aiResponse});
         });
-                  } else {
-            setState(() {
-              _messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
-            });
-    
+      } else {
+        setState(() {
+          _messages.add({"role": "ai", "content": "خطا (${response.statusCode}): ${response.body}"});
         });
       }
     } catch (e) {
@@ -236,4 +234,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
