@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 class GeminiManager {
-  // لیست ۱۰ کلید API شما
   final List<String> _apiKeys = [
     "AQ.Ab8RN6IU-O-1-BqN3rnntAi2yzynHaZSkPYP6VIt6fIOpiHwMA",
     "AQ.Ab8RN6KpVDYUUHM8lApCdcRSp5DJnk5dmYTH1igAq-P2bUCtfA",
@@ -17,37 +16,33 @@ class GeminiManager {
 
   int _currentKeyIndex = 0;
 
-  // لیست مدل‌های مختلف جمنای برای مسابقه سرعت (Race)
   final List<String> _models = [
-  "gemini-3.6-flash",
-  "gemini-2.5-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-];
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+  ];
 
   final Dio _dio = Dio();
 
-  // گرفتن کلید فعلی و جابجایی به کلید بعدی (Round-Robin)
   String _getNextKey() {
     String key = _apiKeys[_currentKeyIndex];
     _currentKeyIndex = (_currentKeyIndex + 1) % _apiKeys.length;
     return key;
   }
 
-  /// متد اصلی برای ارسال پیام با قابلیت مسابقه بین مدل‌ها و لغو درخواست (CancelToken)
   Future<String> sendPromptRacing({
     required String prompt,
     required CancelToken cancelToken,
   }) async {
-    // ایجاد یک پادشاه (Completer) برای اولین پاسخی که برسه
     final futures = _models.map((model) async {
       int attempts = 0;
       while (attempts < 3) {
         if (cancelToken.isCancelled) throw DioException(requestOptions: RequestOptions(path: ''), type: DioExceptionType.cancel);
         
         String apiKey = _getNextKey();
-        // استفاده از آدرس ورکر کلادفلر شما به عنوان پروکسی
-        String url = "https://gentle-bird-f095.leoamirstar.workers.dev/v1/models/$model:generateContent?key=$apiKey";
+        // اتصال مستقیم بدون واسطه کلادفلر
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey";
 
         try {
           final response = await _dio.post(
@@ -61,7 +56,6 @@ class GeminiManager {
           );
 
           if (response.statusCode == 200) {
-            // استخراج متن پاسخ از ساختار جمنای
             var candidates = response.data['candidates'];
             if (candidates != null && candidates.isNotEmpty) {
               return candidates[0]['content']['parts'][0]['text'].toString();
@@ -69,14 +63,12 @@ class GeminiManager {
           }
         } on DioException catch (e) {
           if (e.type == DioExceptionType.cancel) rethrow;
-          // اگر خطای محدودیت سهمیه (429) یا سرور داد، با کلید بعدی تلاش کن
           attempts++;
         }
       }
       throw Exception("Model $model failed after retries.");
     }).toList();
 
-    // مسابقه بین تمام مدل‌ها؛ اولین مدلی که جواب درست بده برنده است!
     try {
       return await Future.any(futures);
     } catch (e) {
@@ -84,4 +76,3 @@ class GeminiManager {
     }
   }
 }
-
