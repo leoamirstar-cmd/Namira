@@ -120,7 +120,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
 
   static const String _apiKey = "AQ.Ab8RN6JxNHXmRM-ZhepBTn4-PbJNLsW61wzTFc7EOeFlikpy9Q";
-  final String _apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent";
+final String _apiUrl = "https://gentle-bird-f095.leoamirstar.workers.dev/v1beta/models/gemini-3.6-flash:generateContent";
 
   // آدرس تصویر سوم (آواتار اصلی نامیرا)
   // لطفا فایل تصویری را در صورت نیاز با asset خود جایگزین کنید یا از NetworkImage زیر استفاده نمایید
