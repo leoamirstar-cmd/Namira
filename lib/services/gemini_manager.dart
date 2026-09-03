@@ -2,15 +2,14 @@ import 'package:dio/dio.dart';
 
 class GeminiManager {
   final Dio _dio = Dio();
-  // استفاده از کلید جدید پروژه
-  final String apiKey = "AQ.Ab8RN6JOxQBuQ6QbFPIsu9rwitCWWqDo8ub0R9TU8zC4sSzcXA";
+  final String apiKey = "AQ.Ab8RN6LxltJX8CgCOTO98r7TwKDKO_jU3t2HZfnS0kOe2_ppRw";
 
   Future<String> sendPromptRacing({
     required String prompt,
     required CancelToken cancelToken,
   }) async {
     try {
-      // ارسال درخواست با ساختار پشتیبانی از پروژه کلود گوگل
+      // استفاده از ساختار استاندارد اندپوینت پروژه‌های کلود
       final response = await _dio.post(
         'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent',
         options: Options(
