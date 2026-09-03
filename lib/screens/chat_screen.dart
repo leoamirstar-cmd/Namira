@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
 import '../services/gemini_manager.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -31,11 +30,12 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final GeminiManager _geminiManager = GeminiManager();
 
-  List<Map<String, String>> _messages = [];
-  List<String> _chatHistoryKeys = [];
+  List<Map<String, dynamic>> _messages = [];
+  List<Map<String, String>> _chatHistoryKeys = [];
   String _currentChatKey = '';
   bool _isLoading = false;
   CancelToken? _cancelToken;
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -51,11 +51,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadChatHistoryKeys() async {
     final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getStringList('chat_keys') ?? [];
+    final rawKeys = prefs.getStringList('chat_keys') ?? [];
     setState(() {
-      _chatHistoryKeys = keys;
+      _chatHistoryKeys = rawKeys.map((k) => {'id': k, 'title': prefs.getString('title_$k') ?? 'گفتگو'}).toList();
       if (_chatHistoryKeys.isNotEmpty) {
-        _currentChatKey = _chatHistoryKeys.last;
+        _currentChatKey = _chatHistoryKeys.last['id']!;
         _loadMessages(_currentChatKey);
       } else {
         _startNewChat();
@@ -68,16 +68,17 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _currentChatKey = newKey;
       _messages = [];
-      if (!_chatHistoryKeys.contains(newKey)) {
-        _chatHistoryKeys.add(newKey);
-      }
+      _chatHistoryKeys.add({'id': newKey, 'title': 'گفتگوی جدید'});
     });
     _saveHistoryKeys();
   }
 
   Future<void> _saveHistoryKeys() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('chat_keys', _chatHistoryKeys);
+    await prefs.setStringList('chat_keys', _chatHistoryKeys.map((e) => e['id']!).toList());
+    for (var chat in _chatHistoryKeys) {
+      await prefs.setString('title_${chat['id']}', chat['title']!);
+    }
   }
 
   Future<void> _loadMessages(String key) async {
@@ -87,30 +88,78 @@ class _ChatScreenState extends State<ChatScreen> {
       final List decoded = jsonDecode(rawData);
       setState(() {
         _currentChatKey = key;
-        _messages = decoded.map((e) => Map<String, String>.from(e)).toList();
+        _messages = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
+      });
+    } else {
+      setState(() {
+        _currentChatKey = key;
+        _messages = [];
       });
     }
   }
 
   Future<void> _saveCurrentMessages() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_currentChatKey, jsonEncode(_messages));
+    // ذخیره پیام‌ها بدون اشیاء File مستقیم (فقط مسیرها ذخیره می‌شوند)
+    final serializableMessages = _messages.map((m) {
+      return {
+        'sender': m['sender'],
+        'text': m['text'],
+        'type': m['type'],
+        'path': m['path'],
+      };
+    }).toList();
+    await prefs.setString(_currentChatKey, jsonEncode(serializableMessages));
   }
 
   Future<void> _deleteChat(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(key);
+    await prefs.remove('title_$key');
     setState(() {
-      _chatHistoryKeys.remove(key);
+      _chatHistoryKeys.removeWhere((element) => element['id'] == key);
     });
     await _saveHistoryKeys();
     if (_currentChatKey == key) {
       if (_chatHistoryKeys.isNotEmpty) {
-        _loadMessages(_chatHistoryKeys.last);
+        _loadMessages(_chatHistoryKeys.last['id']!);
       } else {
         _startNewChat();
       }
     }
+  }
+
+  void _showEditTitleDialog(int index) {
+    TextEditingController editController = TextEditingController(text: _chatHistoryKeys[index]['title']);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ویرایش نام گفتگو'),
+        content: TextField(
+          controller: editController,
+          decoration: const InputDecoration(hintText: 'نام جدید را وارد کنید'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('انصراف'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (editController.text.trim().isNotEmpty) {
+                setState(() {
+                  _chatHistoryKeys[index]['title'] = editController.text.trim();
+                });
+                _saveHistoryKeys();
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('ذخیره'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickFile() async {
@@ -130,11 +179,17 @@ class _ChatScreenState extends State<ChatScreen> {
         final extension = platformFile.extension?.toLowerCase() ?? '';
         final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(extension);
 
-        _sendMediaMessage(
-          type: isImage ? 'image' : 'file',
-          path: platformFile.path!,
-          text: platformFile.name,
-        );
+        if (isImage) {
+          setState(() {
+            _selectedImage = File(platformFile.path!);
+          });
+        } else {
+          _sendMediaMessage(
+            type: 'file',
+            path: platformFile.path!,
+            text: platformFile.name,
+          );
+        }
       }
     } else {
       _showPermissionDialog('دسترسی به فایل‌ها جهت ارسال الزامی است.');
@@ -158,7 +213,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final response = await _geminiManager.sendMessage('فایل ارسال شد: $text');
       if (mounted) {
         setState(() {
-          _messages.add({'sender': 'namira', 'text': response, 'type': 'text'});
+          _messages.add({'sender': 'namira', 'text': response, 'type': 'text', 'path': null});
           _isLoading = false;
         });
         _saveCurrentMessages();
@@ -174,22 +229,29 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _isLoading) return;
+    if ((text.isEmpty && _selectedImage == null) || _isLoading) return;
 
     _cancelToken = CancelToken();
 
+    final imagePath = _selectedImage?.path;
     setState(() {
-      _messages.add({'sender': 'user', 'text': text, 'type': 'text'});
+      _messages.add({
+        'sender': 'user',
+        'text': text,
+        'type': imagePath != null ? 'image' : 'text',
+        'path': imagePath,
+      });
       _isLoading = true;
+      _selectedImage = null;
     });
     _messageController.clear();
     _saveCurrentMessages();
 
     try {
-      final response = await _geminiManager.sendMessage(text);
+      final response = await _geminiManager.sendMessage(text.isEmpty ? 'تصویر ارسال شد' : text);
       if (mounted) {
         setState(() {
-          _messages.add({'sender': 'namira', 'text': response, 'type': 'text'});
+          _messages.add({'sender': 'namira', 'text': response, 'type': 'text', 'path': null});
           _isLoading = false;
         });
         _saveCurrentMessages();
@@ -331,16 +393,27 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ListView.builder(
                 itemCount: _chatHistoryKeys.length,
                 itemBuilder: (context, index) {
-                  final key = _chatHistoryKeys[index];
+                  final chat = _chatHistoryKeys[index];
+                  final key = chat['id']!;
+                  final title = chat['title']!;
                   final isSelected = key == _currentChatKey;
                   return ListTile(
                     selected: isSelected,
                     selectedTileColor: isDark ? Colors.white10 : Colors.black12,
-                    leading: const Icon(Icons.chat_bubble_outline, size: 20),
-                    title: Text('گفتگو ${index + 1}', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                      onPressed: () => _deleteChat(key),
+                    leading: const Icon(Icons.chat_bubble_outline, size: 20, color: Colors.blueAccent),
+                    title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 18),
+                          onPressed: () => _showEditTitleDialog(index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                          onPressed: () => _deleteChat(key),
+                        ),
+                      ],
                     ),
                     onTap: () {
                       _loadMessages(key);
@@ -395,29 +468,17 @@ class _ChatScreenState extends State<ChatScreen> {
                               width: double.infinity,
                               fit: BoxFit.cover,
                             ),
-                          )
-                        else if (msgType == 'file')
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.insert_drive_file, color: Colors.white),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  msgText,
-                                  style: const TextStyle(color: Colors.white),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          ),
+                        if (msgText.isNotEmpty)
+                          Padding(
+                            padding: EdgeInsets.only(top: (msgType == 'image' && msgPath != null) ? 6.0 : 0),
+                            child: Text(
+                              msgText,
+                              style: TextStyle(
+                                color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                                fontSize: 14.5,
+                                height: 1.4,
                               ),
-                            ],
-                          )
-                        else
-                          Text(
-                            msgText,
-                            style: TextStyle(
-                              color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                              fontSize: 14.5,
-                              height: 1.4,
                             ),
                           ),
                         const SizedBox(height: 4),
@@ -425,12 +486,12 @@ class _ChatScreenState extends State<ChatScreen> {
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            if (isUser && msgType == 'text')
+                            if (isUser)
                               InkWell(
                                 onTap: () => _editUserMessage(msgText),
                                 child: const Icon(Icons.edit, size: 15, color: Colors.white70),
                               )
-                            else if (!isUser)
+                            else
                               InkWell(
                                 onTap: () => _copyToClipboard(msgText),
                                 child: Icon(
@@ -452,6 +513,34 @@ class _ChatScreenState extends State<ChatScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 4),
               child: LinearProgressIndicator(backgroundColor: Colors.transparent),
+            ),
+          if (_selectedImage != null)
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              color: isDark ? const Color(0xFF1A232E) : Colors.grey[200],
+              child: Row(
+                children: [
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(_selectedImage!, width: 60, height: 60, fit: BoxFit.cover),
+                      ),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedImage = null),
+                        child: const CircleAvatar(
+                          radius: 10,
+                          backgroundColor: Colors.red,
+                          child: Icon(Icons.close, size: 12, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('تصویر آماده ارسال...', style: TextStyle(fontSize: 12)),
+                ],
+              ),
             ),
           Container(
             padding: const EdgeInsets.all(10),
