@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -37,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String _currentChatKey = '';
   bool _isLoading = false;
   bool _isRecording = false;
+  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -185,6 +187,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _saveCurrentMessages();
 
+    _cancelToken = CancelToken();
     try {
       final response = await _geminiManager.sendMessage('فایل ارسال شد: $text');
       if (mounted) {
@@ -206,6 +209,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isLoading) return;
+
+    _cancelToken = CancelToken();
 
     setState(() {
       _messages.add({'sender': 'user', 'text': text, 'type': 'text'});
@@ -255,6 +260,15 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void _cancelSending() {
+    if (_cancelToken != null && !_cancelToken!.isCancelled) {
+      _cancelToken!.cancel("ارسال لغو شد.");
+    }
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -289,7 +303,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'دستیار نامیرا',
@@ -521,14 +535,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: Colors.blueAccent,
+                  backgroundColor: _isLoading ? Colors.redAccent : Colors.blueAccent,
                   child: IconButton(
-                    icon: const Icon(
-                      Icons.send_rounded,
+                    icon: Icon(
+                      _isLoading ? Icons.stop : Icons.send_rounded,
                       color: Colors.white,
                       size: 20,
                     ),
-                    onPressed: _sendMessage,
+                    onPressed: _isLoading ? _cancelSending : _sendMessage,
                   ),
                 ),
               ],
