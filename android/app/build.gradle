@@ -4,10 +4,12 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def flutterVersionCode = project.hasProperty('flutter-version-code') ? project.property('flutter-version-code') : '1'
+def flutterVersionName = project.hasProperty('flutter-version-name') ? project.property('flutter-version-name') : '1.0'
+
 android {
     namespace "com.example.namira"
-    compileSdk flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    compileSdk 34
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -21,7 +23,7 @@ android {
     defaultConfig {
         applicationId "com.example.namira"
         minSdkVersion 23
-        targetSdkVersion flutter.targetSdkVersion
+        targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }
