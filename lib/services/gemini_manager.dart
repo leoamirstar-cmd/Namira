@@ -25,8 +25,7 @@ class GeminiManager {
           validateStatus: (status) => status! < 500,
         ),
         data: {
-          // مدل رایگان و سریع Groq
-          "model": "llama-3.1-8b-instant",
+          "model": "llama-3.3-70b-versatile",
           "messages": [
             {
               "role": "user",
@@ -39,9 +38,7 @@ class GeminiManager {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        if (data['choices'] != null && 
-            (data['choices'] as List).isNotEmpty) {
-          // ✅ اولین المان لیست
+        if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
           final firstChoice = data['choices'][0];
           if (firstChoice != null && 
               firstChoice['message'] != null && 
