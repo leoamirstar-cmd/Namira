@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 class GeminiManager {
   final Dio _dio = Dio();
   // کلید API جمنای خودت رو اینجا قرار بده
-  final String apiKey = "YOUR_GEMINI_API_KEY";
+  final String apiKey = "AQ.Ab8RN6Idrv65daj1lG6JmVhHXBFErI-W8CJvlUqv7Aj16U_Tfw";
 
   Future<String> sendMessage(String prompt) async {
     try {
