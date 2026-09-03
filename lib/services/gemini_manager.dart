@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'proxy_helper.dart'; // فایل پروکسی رو اینجا صدا زدیم[span_1](start_span)[span_1](end_span)
 
 class GeminiManager {
   final Dio _dio = Dio();
@@ -13,18 +14,20 @@ class GeminiManager {
       return "❌ کلید API تنظیم نشده!";
     }
     
+    // صدا زدن فایل جداگانه برای پروکسی قبل از ارسال درخواست
+    await ProxyHelper.setupProxy(_dio);
+
     try {
       final response = await _dio.post(
         'https://lingering-sea-ef49.leoamirstar.workers.dev',
-                 options: Options(
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-            validateStatus: (status) => status! < 500,
-          ),
- data: {
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status! < 500,
+        ),
+        data: {
           "model": "openai/gpt-oss-120b",
           "messages": [
             {
