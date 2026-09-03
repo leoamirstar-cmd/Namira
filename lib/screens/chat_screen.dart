@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dartd:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
@@ -6,8 +6,13 @@ import '../services/gemini_manager.dart';
 
 class ChatScreen extends StatefulWidget {
   final VoidCallback? onToggleTheme;
+  final VoidCallback? onChangeLanguage;
 
-  const ChatScreen({super.key, this.onToggleTheme});
+  const ChatScreen({
+    super.key, 
+    this.onToggleTheme,
+    this.onChangeLanguage,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -118,6 +123,11 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: const Text('دستیار نامیرا'),
         actions: [
+          if (widget.onChangeLanguage != null)
+            IconButton(
+              icon: const Icon(Icons.language),
+              onPressed: widget.onChangeLanguage,
+            ),
           if (widget.onToggleTheme != null)
             IconButton(
               icon: const Icon(Icons.brightness_6),
