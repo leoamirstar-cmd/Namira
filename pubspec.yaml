@@ -16,8 +16,8 @@ dependencies:
   path_provider: ^2.1.2
   permission_handler: ^11.3.1
   file_picker: ^8.0.0
-  record: ^5.0.0
-  
+  flutter_sound: ^9.2.13
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -27,3 +27,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/namira_avatar.png
+    
