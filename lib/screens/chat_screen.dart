@@ -8,12 +8,14 @@ class ChatScreen extends StatefulWidget {
   final VoidCallback? onToggleTheme;
   final VoidCallback? onChangeLanguage;
   final String? currentLanguage;
+  final bool? isDarkMode;
 
   const ChatScreen({
     super.key, 
     this.onToggleTheme,
     this.onChangeLanguage,
     this.currentLanguage,
+    this.isDarkMode,
   });
 
   @override
