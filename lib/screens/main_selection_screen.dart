@@ -1,4 +1,3 @@
-import 'chat_screen_v2.dart';
 import 'package:flutter/material.dart';
 import 'chat_screen.dart';
 import 'music_screen.dart';
