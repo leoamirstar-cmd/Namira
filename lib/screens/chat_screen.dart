@@ -1,4 +1,4 @@
-import 'dart01:json';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -269,6 +269,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +304,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'دستیار نامیرا',
@@ -324,14 +325,14 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           if (widget.onChangeLanguage != null)
             IconButton(
-              icon: Icon(Icons.language, color: isDark ? Colors.white70 : Colors.black70),
+              icon: Icon(Icons.language, color: isDark ? Colors.white70 : Colors.black54),
               onPressed: () => widget.onChangeLanguage!(currentLang == 'fa' ? 'en' : 'fa'),
             ),
           if (widget.onToggleTheme != null)
             IconButton(
               icon: Icon(
                 isDark ? Icons.light_mode : Icons.dark_mode,
-                color: isDark ? Colors.white70 : Colors.black70,
+                color: isDark ? Colors.white70 : Colors.black54,
               ),
               onPressed: () => widget.onToggleTheme!(!isDark),
             ),
@@ -403,7 +404,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 return Align(
                   alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
-                    margin: const EdgeInsets.vertical(6),
+                    margin: const EdgeInsets.symmetric(vertical: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
                     decoration: BoxDecoration(
@@ -418,7 +419,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (msgType == 'image' && msgPath != null)
                           ClipRRect(
@@ -502,13 +503,13 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               children: [
                 IconButton(
-                  icon: Icon(Icons.attach_file, color: isDark ? Colors.white70 : Colors.black70),
+                  icon: Icon(Icons.attach_file, color: isDark ? Colors.white70 : Colors.black54),
                   onPressed: _pickFile,
                 ),
                 IconButton(
                   icon: Icon(
                     _isRecording ? Icons.stop_circle : Icons.mic,
-                    color: _isRecording ? Colors.redAccent : (isDark ? Colors.white70 : Colors.black70),
+                    color: _isRecording ? Colors.redAccent : (isDark ? Colors.white70 : Colors.black54),
                   ),
                   onPressed: _toggleRecording,
                 ),
