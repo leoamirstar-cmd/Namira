@@ -19,7 +19,7 @@ class GeminiManager {
           validateStatus: (status) => status! < 500,
         ),
         data: {
-          "model": "llama-3.1-8b-instant", // تغییر مدل به نسخه پایدار و سریع
+          "model": "llama-3.1-8b-instant",
           "messages": [
             {
               "role": "user",
@@ -33,9 +33,13 @@ class GeminiManager {
       if (response.statusCode == 200) {
         final data = response.data;
         if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
-          final message = data['choices']['message'];
-          if (message != null && message['content'] != null) {
-            return message['content'] as String;
+          // اصلاح ایندکس لیست برای استخراج درست متن پاسخ
+          final firstChoice = data['choices'];
+          if (firstChoice != null && firstChoice['message'] != null) {
+            final content = firstChoice['message']['content'];
+            if (content != null) {
+              return content.toString();
+            }
           }
         }
         return "پاسخی دریافت نشد.";
