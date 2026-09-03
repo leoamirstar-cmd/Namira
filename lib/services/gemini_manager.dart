@@ -2,9 +2,8 @@ import 'package:dio/dio.dart';
 
 class GeminiManager {
   final Dio _dio = Dio();
-  final String apiKey = "AQ.Ab8RN6Idrv65daj1lG6JmVhHXBFErI-W8CJvlUqv7Aj16U_Tfw"; // کلید API خودت رو اینجا بذار
+  final String apiKey = "AQ.Ab8RN6Idrv65daj1lG6JmVhHXBFErI-W8CJvlUqv7Aj16U_Tfw";
 
-  // استفاده از مدل جدید و به‌روز جمنای
   Future<String> sendPromptRacing({
     required String prompt,
     required CancelToken cancelToken,
@@ -30,7 +29,7 @@ class GeminiManager {
       }
       return "پاسخی از جمنای دریافت نشد.";
     } catch (e) {
-      if (CancelToken.isCancel(e)) {
+      if (e is DioException && CancelToken.isCancel(e)) {
         return "درخواست لغو شد.";
       }
       return "خطا در ارتباط با هوش مصنوعی: $e";
