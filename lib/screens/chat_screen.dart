@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/gemini_manager.dart';
 
@@ -31,13 +30,11 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final GeminiManager _geminiManager = GeminiManager();
-  final Record _audioRecorder = Record();
 
   List<Map<String, String>> _messages = [];
   List<String> _chatHistoryKeys = [];
   String _currentChatKey = '';
   bool _isLoading = false;
-  bool _isRecording = false;
   CancelToken? _cancelToken;
 
   @override
@@ -48,7 +45,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _audioRecorder.dispose();
     _messageController.dispose();
     super.dispose();
   }
@@ -142,35 +138,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } else {
       _showPermissionDialog('دسترسی به فایل‌ها جهت ارسال الزامی است.');
-    }
-  }
-
-  Future<void> _toggleRecording() async {
-    if (_isRecording) {
-      final path = await _audioRecorder.stop();
-      setState(() {
-        _isRecording = false;
-      });
-      if (path != null) {
-        _sendMediaMessage(type: 'audio', path: path, text: '[ویس صوتی]');
-      }
-    } else {
-      PermissionStatus status = await Permission.microphone.request();
-      if (status.isGranted) {
-        if (await _audioRecorder.hasPermission()) {
-          final dir = await getApplicationDocumentsDirectory();
-          final filePath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-          
-          await _audioRecorder.start(
-            path: filePath,
-          );
-          setState(() {
-            _isRecording = true;
-          });
-        }
-      } else {
-        _showPermissionDialog('دسترسی به میکروفون جهت ضبط ویس الزامی است.');
-      }
     }
   }
 
@@ -444,15 +411,6 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             ],
                           )
-                        else if (msgType == 'audio')
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.play_arrow, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text('پیام صوتی (ویس)', style: TextStyle(color: Colors.white)),
-                            ],
-                          )
                         else
                           Text(
                             msgText,
@@ -504,13 +462,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: Icon(Icons.attach_file, color: isDark ? Colors.white70 : Colors.black54),
                   onPressed: _pickFile,
                 ),
-                IconButton(
-                  icon: Icon(
-                    _isRecording ? Icons.stop_circle : Icons.mic,
-                    color: _isRecording ? Colors.redAccent : (isDark ? Colors.white70 : Colors.black54),
-                  ),
-                  onPressed: _toggleRecording,
-                ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
@@ -519,7 +470,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     minLines: 1,
                     style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                     decoration: InputDecoration(
-                      hintText: _isRecording ? 'در حال ضبط ویس...' : 'پیام خود را بنویسید...',
+                      hintText: 'پیام خود را بنویسید...',
                       hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
                       filled: true,
                       fillColor: isDark ? const Color(0xFF101820) : const Color(0xFFF0F2F5),
