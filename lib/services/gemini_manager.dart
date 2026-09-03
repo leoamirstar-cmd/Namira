@@ -16,11 +16,10 @@ class GeminiManager {
             'Authorization': 'Bearer $apiKey',
             'Content-Type': 'application/json',
           },
-          // این خط باعث میشه خطاهای 403 یا 404 ارور سخت ندن و بتونیم متن جواب رو ببینیم
           validateStatus: (status) => status! < 500,
         ),
         data: {
-          "model": "llama-3.3-70b-versatile",
+          "model": "llama-3.1-8b-instant", // تغییر مدل به نسخه پایدار و سریع
           "messages": [
             {
               "role": "user",
