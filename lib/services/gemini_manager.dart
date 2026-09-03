@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 class GeminiManager {
   final Dio _dio = Dio();
   
-  // کلید جدیدی که ساختی
   final String apiKey = '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';
 
   Future<String> sendPromptRacing({
@@ -25,7 +24,7 @@ class GeminiManager {
           validateStatus: (status) => status! < 500,
         ),
         data: {
-          "model": "llama-3.1-8b-instant",
+          "model": "llama-3.3-70b-versatile",
           "messages": [
             {
               "role": "user",
@@ -39,7 +38,6 @@ class GeminiManager {
       if (response.statusCode == 200) {
         final data = response.data;
         if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
-          // استخراج درست اولین المان از choices
           final firstChoice = data['choices'][0];
           if (firstChoice != null && 
               firstChoice['message'] != null && 
