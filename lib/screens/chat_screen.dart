@@ -5,8 +5,8 @@ import 'package:dio/dio.dart';
 import '../services/gemini_manager.dart';
 
 class ChatScreen extends StatefulWidget {
-  final VoidCallback? onToggleTheme;
-  final VoidCallback? onChangeLanguage;
+  final Function(bool)? onToggleTheme;
+  final Function(String)? onChangeLanguage;
   final String? currentLanguage;
   final bool? isDarkMode;
 
@@ -123,6 +123,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool currentTheme = widget.isDarkMode ?? false;
+    final String currentLang = widget.currentLanguage ?? 'fa';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('دستیار نامیرا'),
@@ -130,12 +133,12 @@ class _ChatScreenState extends State<ChatScreen> {
           if (widget.onChangeLanguage != null)
             IconButton(
               icon: const Icon(Icons.language),
-              onPressed: widget.onChangeLanguage,
+              onPressed: () => widget.onChangeLanguage!(currentLang == 'fa' ? 'en' : 'fa'),
             ),
           if (widget.onToggleTheme != null)
             IconButton(
-              icon: const Icon(Icons.brightness_6),
-              onPressed: widget.onToggleTheme,
+              icon: Icon(currentTheme ? Icons.light_mode : Icons.dark_mode),
+              onPressed: () => widget.onToggleTheme!(!currentTheme),
             ),
         ],
       ),
