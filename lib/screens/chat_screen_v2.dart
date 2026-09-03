@@ -246,7 +246,7 @@ class _ChatScreenV2State extends State<ChatScreenV2> {
   Widget _buildImagePreview() {
     return Container(
       padding: const EdgeInsets.all(8.0),
-      color: Colors.black25,
+      color: Colors.black26,
       child: Row(
         children: [
           Stack(
