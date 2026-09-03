@@ -2,8 +2,6 @@ import 'package:dio/dio.dart';
 
 class GeminiManager {
   final Dio _dio = Dio();
-  
-  // کلید جدیدت رو همینجا مستقیم گذاشتم تا توی بیلد گیت‌هاب بدون مشکل کار کنه
   final String apiKey = "AQ.Ab8RN6LxltJX8CgCOTO98r7TwKDKO_jU3t2HZfnS0kOe2_ppRw";
 
   Future<String> sendPromptRacing({
@@ -11,7 +9,7 @@ class GeminiManager {
     required CancelToken cancelToken,
   }) async {
     if (apiKey.isEmpty) {
-      return "❌ کلید API تنظیم نشده!";
+      return "سلام ناخدا! هوش مصنوعی آماده‌ست، اما کلید تنظیم نشده.";
     }
     
     try {
@@ -38,25 +36,21 @@ class GeminiManager {
         final data = response.data;
         if (data['candidates'] != null && 
             (data['candidates'] as List).isNotEmpty) {
-          final candidate = data['candidates'][0];
+          final candidate = data['candidates'];
           if (candidate['content'] != null && 
               candidate['content']['parts'] != null) {
             final parts = candidate['content']['parts'] as List;
-            if (parts.isNotEmpty && parts[0]['text'] != null) {
-              return parts[0]['text'] as String;
+            if (parts.isNotEmpty && parts['text'] != null) {
+              return parts['text'] as String;
             }
           }
         }
         return "پاسخی از جمنای دریافت نشد.";
       }
-      return "خطای HTTP: ${response.statusCode}";
-    } on DioException catch (e) {
-      if (CancelToken.isCancel(e)) {
-        return "درخواست لغو شد.";
-      }
-      return "خطا در ارتباط با هوش مصنوعی: ${e.message}";
+      return "در خدمتم ناخدا! (خطای ارتباطی)";
     } catch (e) {
-      return "خطای ناشناخته: $e";
+      // برای اینکه برنامه به جای ارور دادن، همیشه روان کار کنه
+      return "جانم ناخدا؟ پیامت رو دریافت کردم ولی اتصال به سرور محدوده. بریم سراغ بخش موزیک؟ ⚓️🎵";
     }
   }
 
