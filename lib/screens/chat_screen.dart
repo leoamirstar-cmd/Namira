@@ -5,7 +5,9 @@ import 'package:dio/dio.dart';
 import '../services/gemini_manager.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final VoidCallback? onToggleTheme;
+
+  const ChatScreen({super.key, this.onToggleTheme});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -115,6 +117,13 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('دستیار نامیرا'),
+        actions: [
+          if (widget.onToggleTheme != null)
+            IconButton(
+              icon: const Icon(Icons.brightness_6),
+              onPressed: widget.onToggleTheme,
+            ),
+        ],
       ),
       drawer: Drawer(
         child: Column(
@@ -148,7 +157,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     title: Text('گفتگو ${index + 1}'),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red),
-                      onTap: () => _deleteChat(key),
+                      onPressed: () => _deleteChat(key),
                     ),
                     onTap: () {
                       _loadMessages(key);
@@ -179,7 +188,10 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: isUser ? Colors.blue[100] : Colors.grey[200],
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(msg['text'] ?? ''),
+                    child: Text(
+                      msg['text'] ?? '',
+                      style: const TextStyle(color: Colors.black87),
+                    ),
                   ),
                 );
               },
@@ -204,7 +216,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onTap: _sendMessage,
+                  onPressed: _sendMessage,
                 ),
               ],
             ),
