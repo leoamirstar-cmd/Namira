@@ -2,30 +2,34 @@ import 'package:dio/dio.dart';
 
 class GeminiManager {
   final Dio _dio = Dio();
-  final String apiKey = "AQ.Ab8RN6LxltJX8CgCOTO98r7TwKDKO_jU3t2HZfnS0kOe2_ppRw";
+  
+  // کلید گروق شما
+  final String apiKey = "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";
 
   Future<String> sendPromptRacing({
     required String prompt,
     required CancelToken cancelToken,
   }) async {
     if (apiKey.isEmpty) {
-      return "سلام ناخدا! هوش مصنوعی آماده‌ست، اما کلید تنظیم نشده.";
+      return "❌ کلید API تنظیم نشده!";
     }
     
     try {
+      // استفاده از اندپوینت استاندارد OpenAI-compatible شرکت Groq با مدل لاما
       final response = await _dio.post(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey',
+        'https://api.groq.com/openai/v1/chat/completions',
         options: Options(
           headers: {
+            'Authorization': 'Bearer $apiKey',
             'Content-Type': 'application/json',
           },
         ),
         data: {
-          "contents": [
+          "model": "llama-3.3-70b-versatile",
+          "messages": [
             {
-              "parts": [
-                {"text": prompt}
-              ]
+              "role": "user",
+              "content": prompt
             }
           ]
         },
@@ -34,23 +38,22 @@ class GeminiManager {
 
       if (response.statusCode == 200) {
         final data = response.data;
-        if (data['candidates'] != null && 
-            (data['candidates'] as List).isNotEmpty) {
-          final candidate = data['candidates'];
-          if (candidate['content'] != null && 
-              candidate['content']['parts'] != null) {
-            final parts = candidate['content']['parts'] as List;
-            if (parts.isNotEmpty && parts['text'] != null) {
-              return parts['text'] as String;
-            }
+        if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
+          final message = data['choices']['message'];
+          if (message != null && message['content'] != null) {
+            return message['content'] as String;
           }
         }
-        return "پاسخی از جمنای دریافت نشد.";
+        return "پاسخی از هوش مصنوعی دریافت نشد.";
       }
-      return "در خدمتم ناخدا! (خطای ارتباطی)";
+      return "خطای HTTP: ${response.statusCode}";
+    } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        return "درخواست لغو شد.";
+      }
+      return "خطا در ارتباط با هوش مصنوعی: ${e.message}";
     } catch (e) {
-      // برای اینکه برنامه به جای ارور دادن، همیشه روان کار کنه
-      return "جانم ناخدا؟ پیامت رو دریافت کردم ولی اتصال به سرور محدوده. بریم سراغ بخش موزیک؟ ⚓️🎵";
+      return "خطای ناشناخته: $e";
     }
   }
 
