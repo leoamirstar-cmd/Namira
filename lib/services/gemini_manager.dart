@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 class GeminiManager {
   final Dio _dio = Dio();
   
+  // کلید API جدید
   final String apiKey = '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';
 
   Future<String> sendPromptRacing({
@@ -24,7 +25,7 @@ class GeminiManager {
           validateStatus: (status) => status! < 500,
         ),
         data: {
-          "model": "llama-3.3-70b-versatile",
+          "model": "llama-3.1-8b-instant",
           "messages": [
             {
               "role": "user",
