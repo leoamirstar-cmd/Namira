@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -38,7 +37,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String _currentChatKey = '';
   bool _isLoading = false;
   bool _isRecording = false;
-  CancelToken? _cancelToken;
 
   @override
   void initState() {
@@ -187,9 +185,8 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _saveCurrentMessages();
 
-    _cancelToken = CancelToken();
     try {
-      final response = await _geminiManager.sendMessage('فایل ارسال شد: $text', cancelToken: _cancelToken);
+      final response = await _geminiManager.sendMessage('فایل ارسال شد: $text');
       if (mounted) {
         setState(() {
           _messages.add({'sender': 'namira', 'text': response, 'type': 'text'});
@@ -210,8 +207,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isLoading) return;
 
-    _cancelToken = CancelToken();
-
     setState(() {
       _messages.add({'sender': 'user', 'text': text, 'type': 'text'});
       _isLoading = true;
@@ -220,7 +215,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _saveCurrentMessages();
 
     try {
-      final response = await _geminiManager.sendMessage(text, cancelToken: _cancelToken);
+      final response = await _geminiManager.sendMessage(text);
       if (mounted) {
         setState(() {
           _messages.add({'sender': 'namira', 'text': response, 'type': 'text'});
@@ -260,16 +255,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _cancelSending() {
-    if (_cancelToken != null && !_cancelToken!.isCancelled) {
-      _cancelToken!.cancel("ارسال لغو شد.");
-    }
-    setState(() {
-      _isLoading = false;
-    });
-  }
-
-
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -304,7 +289,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 10),
             Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAlignment.start,
               children: [
                 Text(
                   'دستیار نامیرا',
@@ -536,14 +521,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 22,
-                  backgroundColor: _isLoading ? Colors.redAccent : Colors.blueAccent,
+                  backgroundColor: Colors.blueAccent,
                   child: IconButton(
-                    icon: Icon(
-                      _isLoading ? Icons.stop : Icons.send_rounded,
+                    icon: const Icon(
+                      Icons.send_rounded,
                       color: Colors.white,
                       size: 20,
                     ),
-                    onPressed: _isLoading ? _cancelSending : _sendMessage,
+                    onPressed: _sendMessage,
                   ),
                 ),
               ],
