@@ -15,7 +15,7 @@ class GeminiManager {
     
     try {
       final response = await _dio.post(
-        'https://api.groq.com/openai/v1/chat/completions',
+        'https://lingering-sea-ef49.leoamirstar.workers.dev'
         options: Options(
           headers: {
             'Authorization': 'Bearer $apiKey',
