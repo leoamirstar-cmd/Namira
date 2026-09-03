@@ -33,111 +33,116 @@ class MainSelectionScreen extends StatelessWidget {
             ),
           ),
           child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Colors.pinkAccent, Colors.purpleAccent, Colors.blueAccent],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.pinkAccent.withOpacity(0.4),
-                            blurRadius: 25,
-                            spreadRadius: 8,
-                          )
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(3.0),
-                        child: ClipOval(
-                          child: Image.asset(
-                            "assets/images/namira_avatar.png",
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => const Center(
-                              child: Text('N', style: TextStyle(fontSize: 42, color: Colors.white, fontWeight: FontWeight.bold)),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                              colors: [Colors.pinkAccent, Colors.purpleAccent, Colors.blueAccent],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.pinkAccent.withOpacity(0.4),
+                                blurRadius: 25,
+                                spreadRadius: 8,
+                              )
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(3.0),
+                            child: ClipOval(
+                              child: Image.asset(
+                                "assets/images/namira_avatar.png",
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) => const Center(
+                                  child: Text('N', style: TextStyle(fontSize: 42, color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [Colors.pinkAccent, Colors.purpleAccent, Colors.cyanAccent],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ).createShader(bounds),
-                      child: Text(
-                        currentLanguage == 'fa' ? 'پلتفرم هوشمند نامیرا' : 'Namira Smart Platform',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                        const SizedBox(height: 24),
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Colors.pinkAccent, Colors.purpleAccent, Colors.cyanAccent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds),
+                          child: Text(
+                            currentLanguage == 'fa' ? 'پلتفرم هوشمند نامیرا' : 'Namira Smart Platform',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      currentLanguage == 'fa' ? 'یک تجربه پرزرق‌وبرق و مدرن' : 'A vibrant & modern experience',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDarkMode ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    // دکمه هوش مصنوعی بدون عبارت نسخه ۱
-                    _buildFancyMenuCard(
-                      context,
-                      title: currentLanguage == 'fa' ? 'هوش مصنوعی' : 'Namira AI',
-                      subtitle: currentLanguage == 'fa' ? 'چت ساده با دستیار هوشمند' : 'Simple chat assistant',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      gradientColors: [const Color(0xFF2481CC), const Color(0xFF00C6FF)],
-                      onTap: () {
-                        Navigator.push(
+                        const SizedBox(height: 8),
+                        Text(
+                          currentLanguage == 'fa' ? 'یک تجربه پرزرق‌وبرق و مدرن' : 'A vibrant & modern experience',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDarkMode ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        // دکمه هوش مصنوعی بدون عبارت نسخه ۱
+                        _buildFancyMenuCard(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => ChatScreen(
-                              onToggleTheme: onToggleTheme,
-                              onChangeLanguage: onChangeLanguage,
-                              currentLanguage: currentLanguage,
-                              isDarkMode: isDarkMode,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    // دکمه دانلود موزیک
-                    _buildFancyMenuCard(
-                      context,
-                      title: currentLanguage == 'fa' ? 'کلاب دانلود موزیک' : 'Music Downloader Club',
-                      subtitle: currentLanguage == 'fa' ? 'جستجو، پخش آنلاین و ذخیره موزیک' : 'Search, stream & download music',
-                      icon: Icons.headphones_rounded,
-                      gradientColors: [const Color(0xFFFF416C), const Color(0xFFFF4B2B)],
-                      onTap: () {
-                        Navigator.push(
+                          title: currentLanguage == 'fa' ? 'هوش مصنوعی' : 'Namira AI',
+                          subtitle: currentLanguage == 'fa' ? 'چت ساده با دستیار هوشمند' : 'Simple chat assistant',
+                          icon: Icons.chat_bubble_outline_rounded,
+                          gradientColors: [const Color(0xFF2481CC), const Color(0xFF00C6FF)],
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  onToggleTheme: onToggleTheme,
+                                  onChangeLanguage: onChangeLanguage,
+                                  currentLanguage: currentLanguage,
+                                  isDarkMode: isDarkMode,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        // دکمه دانلود موزیک
+                        _buildFancyMenuCard(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => MusicScreen(
-                              currentLanguage: currentLanguage,
-                              isDarkMode: isDarkMode,
-                            ),
-                          ),
-                        );
-                      },
+                          title: currentLanguage == 'fa' ? 'کلاب دانلود موزیک' : 'Music Downloader Club',
+                          subtitle: currentLanguage == 'fa' ? 'جستجو، پخش آنلاین و ذخیره موزیک' : 'Search, stream & download music',
+                          icon: Icons.headphones_rounded,
+                          gradientColors: [const Color(0xFFFF416C), const Color(0xFFFF4B2B)],
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MusicScreen(
+                                  currentLanguage: currentLanguage,
+                                  isDarkMode: isDarkMode,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
