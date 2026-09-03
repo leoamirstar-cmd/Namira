@@ -1,4 +1,4 @@
-import 'dartd:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
@@ -7,11 +7,13 @@ import '../services/gemini_manager.dart';
 class ChatScreen extends StatefulWidget {
   final VoidCallback? onToggleTheme;
   final VoidCallback? onChangeLanguage;
+  final String? currentLanguage;
 
   const ChatScreen({
     super.key, 
     this.onToggleTheme,
     this.onChangeLanguage,
+    this.currentLanguage,
   });
 
   @override
