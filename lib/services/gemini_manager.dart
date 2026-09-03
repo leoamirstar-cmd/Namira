@@ -15,7 +15,7 @@ class GeminiManager {
     
     try {
       final response = await _dio.post(
-        'https://lingering-sea-ef49.leoamirstar.workers.dev'
+        'https://lingering-sea-ef49.leoamirstar.workers.dev',
         options: Options(
           headers: {
             'Authorization': 'Bearer $apiKey',
