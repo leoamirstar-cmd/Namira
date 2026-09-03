@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/gemini_manager.dart';
 
@@ -31,7 +31,9 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final GeminiManager _geminiManager = GeminiManager();
-  final AudioRecorder _audioRecorder = AudioRecorder();
+  
+  // جاگزینی پکیج جدید ضبط صدا
+  FlutterSoundRecorder? _audioRecorder;
 
   List<Map<String, String>> _messages = [];
   List<String> _chatHistoryKeys = [];
@@ -43,12 +45,19 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _initRecorder();
     _loadChatHistoryKeys();
+  }
+
+  Future<void> _initRecorder() async {
+    _audioRecorder = FlutterSoundRecorder();
+    await _audioRecorder!.openRecorder();
   }
 
   @override
   void dispose() {
-    _audioRecorder.dispose();
+    _audioRecorder?.closeRecorder();
+    _audioRecorder = null;
     _messageController.dispose();
     super.dispose();
   }
@@ -147,7 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _toggleRecording() async {
     if (_isRecording) {
-      final path = await _audioRecorder.stop();
+      final path = await _audioRecorder!.stopRecorder();
       setState(() {
         _isRecording = false;
       });
@@ -157,18 +166,16 @@ class _ChatScreenState extends State<ChatScreen> {
     } else {
       PermissionStatus status = await Permission.microphone.request();
       if (status.isGranted) {
-        if (await _audioRecorder.hasPermission()) {
-          final dir = await getApplicationDocumentsDirectory();
-          final filePath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-          
-          await _audioRecorder.start(
-            const RecordConfig(),
-            path: filePath,
-          );
-          setState(() {
-            _isRecording = true;
-          });
-        }
+        final dir = await getApplicationDocumentsDirectory();
+        final filePath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
+        
+        await _audioRecorder!.startRecorder(
+          toFile: filePath,
+          codec: Codec.aacADTS,
+        );
+        setState(() {
+          _isRecording = true;
+        });
       } else {
         _showPermissionDialog('دسترسی به میکروفون جهت ضبط ویس الزامی است.');
       }
