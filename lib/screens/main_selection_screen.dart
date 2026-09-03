@@ -129,7 +129,7 @@ class MainSelectionScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ChatScreenV2(),
+                            builder: (context) => const ChatScreen(),
                           ),
                         );
                       },
