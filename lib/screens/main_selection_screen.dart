@@ -96,10 +96,10 @@ class MainSelectionScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    // دکمه چت معمولی V1
+                    // دکمه هوش مصنوعی بدون عبارت نسخه ۱
                     _buildFancyMenuCard(
                       context,
-                      title: currentLanguage == 'fa' ? 'هوش مصنوعی (نسخه ۱)' : 'Namira AI (V1)',
+                      title: currentLanguage == 'fa' ? 'هوش مصنوعی' : 'Namira AI',
                       subtitle: currentLanguage == 'fa' ? 'چت ساده با دستیار هوشمند' : 'Simple chat assistant',
                       icon: Icons.chat_bubble_outline_rounded,
                       gradientColors: [const Color(0xFF2481CC), const Color(0xFF00C6FF)],
@@ -113,23 +113,6 @@ class MainSelectionScreen extends StatelessWidget {
                               currentLanguage: currentLanguage,
                               isDarkMode: isDarkMode,
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    // دکمه جدید چت پیشرفته V2
-                    _buildFancyMenuCard(
-                      context,
-                      title: currentLanguage == 'fa' ? 'هوش مصنوعی پیشرفته (V2)' : 'Namira AI Advanced (V2)',
-                      subtitle: currentLanguage == 'fa' ? 'پیش‌نمایش عکس، تنظیمات و ویرایش چت' : 'Photo preview, settings & edit chat',
-                      icon: Icons.auto_awesome_rounded,
-                      gradientColors: [const Color(0xFF8E2DE2), const Color(0xFF4A00E0)],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ChatScreen(),
                           ),
                         );
                       },
