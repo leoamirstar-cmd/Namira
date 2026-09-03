@@ -9,12 +9,15 @@ class GeminiManager {
     required CancelToken cancelToken,
   }) async {
     try {
+      // استفاده از مسیر پایدار و استاندارد v1 برای جلوگیری از خطای 404
       final response = await _dio.post(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey',
+        'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$apiKey',
         data: {
           "contents": [
             {
-              "parts": [{"text": prompt}]
+              "parts": [
+                {"text": prompt}
+              ]
             }
           ]
         },
@@ -24,7 +27,13 @@ class GeminiManager {
       if (response.statusCode == 200) {
         final data = response.data;
         if (data['candidates'] != null && data['candidates'].isNotEmpty) {
-          return data['candidates']['content']['parts']['text'];
+          final candidate = data['candidates'];
+          if (candidate['content'] != null && candidate['content']['parts'] != null) {
+            final parts = candidate['content']['parts'];
+            if (parts.isNotEmpty && parts['text'] != null) {
+              return parts['text'];
+            }
+          }
         }
       }
       return "پاسخی از جمنای دریافت نشد.";
