@@ -16,14 +16,15 @@ class GeminiManager {
     try {
       final response = await _dio.post(
         'https://lingering-sea-ef49.leoamirstar.workers.dev',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          },
-          validateStatus: (status) => status! < 500,
-        ),
-        data: {
+                 options: Options(
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            validateStatus: (status) => status! < 500,
+          ),
+ data: {
           "model": "openai/gpt-oss-120b",
           "messages": [
             {
