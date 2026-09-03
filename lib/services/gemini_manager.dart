@@ -1,20 +1,32 @@
 import 'package:dio/dio.dart';
 
 class GeminiManager {
-  // اینجا می‌تونی کلید API یا منطق اتصال مستقیم رو بذاری
   final Dio _dio = Dio();
+  // کلید API جمنای خودت رو اینجا قرار بده
+  final String apiKey = "YOUR_GEMINI_API_KEY";
 
-  Future<String> sendPromptRacing({
-    required String prompt,
-    required CancelToken cancelToken,
-  }) async {
+  Future<String> sendMessage(String prompt) async {
     try {
-      // شبیه‌سازی درخواست یا اتصال به API اصلی جمنای
-      // می‌تونی کد اتصال واقعی خودت رو اینجا قرار بدی
-      await Future.delayed(const Duration(seconds: 1));
-      return "سلام ناخدا! پیام شما دریافت شد: '$prompt' — همه‌چیز عالی پیش میره! ⚓️";
+      final response = await _dio.post(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey',
+        data: {
+          "contents": [
+            {
+              "parts": [{"text": prompt}]
+            }
+          ]
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final candidate = response.data['candidates'];
+        if (candidate != null && candidate.isNotEmpty) {
+          return candidate['content']['parts']['text'];
+        }
+      }
+      return "پاسخی دریافت نشد!";
     } catch (e) {
-      throw Exception("خطا در ارتباط با هوش مصنوعی: $e");
+      return "خطا در ارتباط با هوش مصنوعی: $e";
     }
   }
 }
