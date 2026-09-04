@@ -94,14 +94,15 @@ class _MusicScreenState extends State<MusicScreen> {
       } else {
         throw Exception("خطا در پاسخ سرور");
       }
+  } catch (e) {
+  setState(() {
+    _chatItems.add({
+      "type": "system",
+      "text": 'خطا: $e',
+    });
+  });
+}
 
-    } catch (e) {
-      setState(() {
-        _chatItems.add({
-          "type": "system",
-          "text": 'خطا در استخراج اطلاعات موزیک از سرور. لطفاً مجدداً تلاش کنید.',
-        });
-      });
     } finally {
       setState(() {
         _isLoading = false;
