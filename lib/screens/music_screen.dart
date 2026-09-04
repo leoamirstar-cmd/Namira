@@ -52,7 +52,7 @@ class _MusicScreenState extends State<MusicScreen> {
         yt.Video? validVideo;
         yt.StreamManifest? manifest;
 
-        for (var video in searchResults.take(5)) {
+        for (var video in searchResults.take(3)) {
           try {
             var tempManifest = await ytInstance.videos.streamsClient.getManifest(video.id);
             if (tempManifest.audioOnly.isNotEmpty) {
@@ -74,25 +74,31 @@ class _MusicScreenState extends State<MusicScreen> {
               ? "${validVideo.duration!.inMinutes}:${(validVideo.duration!.inSeconds % 60).toString().padLeft(2, '0')}" 
               : "03:30";
 
+          // ساخت مدل پیام موزیک که فایل رو آماده تحویل می‌کنه
+          MusicMessageModel musicModel = MusicMessageModel(
+            title: title,
+            author: author,
+            audioUrl: audioUrl,
+            duration: duration,
+          );
+
+          // به صورت خودکار فایل رو دانلود و ذخیره می‌کنیم تا کاملاً آماده باشه
+          await _autoDownloadAndSave(musicModel);
+
           setState(() {
             _chatItems.add({
               "type": "music",
-              "music": MusicMessageModel(
-                title: title,
-                author: author,
-                audioUrl: audioUrl,
-                duration: duration,
-              ),
+              "music": musicModel,
             });
           });
         } else {
-          throw Exception("موزیک معتبری یافت نشد.");
+          throw Exception("موزیک یافت نشد");
         }
       } else {
         setState(() {
           _chatItems.add({
             "type": "system",
-            "text": widget.currentLanguage == 'fa' ? 'موزیکی با این مشخصات پیدا نشد!' : 'No music found for this query!',
+            "text": 'موزیکی با این مشخصات پیدا نشد!',
           });
         });
       }
@@ -100,7 +106,7 @@ class _MusicScreenState extends State<MusicScreen> {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": widget.currentLanguage == 'fa' ? 'خطا در دریافت موزیک: لطفاً دوباره تلاش کنید.' : 'Error fetching music: Please try again.',
+          "text": 'خطا در دریافت موزیک. لطفاً دوباره تلاش کنید.',
         });
       });
     } finally {
@@ -108,6 +114,37 @@ class _MusicScreenState extends State<MusicScreen> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  // متد برای ذخیره خودکار فایل صوتی در حافظه گوشی
+  Future<void> _autoDownloadAndSave(MusicMessageModel music) async {
+    try {
+      await Permission.storage.request();
+      Directory? directory;
+      if (Platform.isAndroid) {
+        directory = Directory('/storage/emulated/0/Download');
+        if (!directory.existsSync()) {
+          directory = await getExternalStorageDirectory();
+        }
+      } else {
+        directory = await getApplicationDocumentsDirectory();
+      }
+
+      String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+      if (safeTitle.length > 30) safeTitle = safeTitle.substring(0, 30);
+      String filePath = "${directory!.path}/$safeTitle.mp3";
+
+      // اگر از قبل دانلود نشده بود، فایل رو دانلود می‌کنیم
+      File file = File(filePath);
+      if (!await file.exists()) {
+        Dio dio = Dio();
+        await dio.download(music.audioUrl, filePath);
+      }
+
+      music.isDownloaded = true;
+    } catch (_) {
+      // اگر دانلود خودکار در پس‌زمینه ارور داد، کاربر خودش می‌تونه دستی دکمه دانلود رو بزنه
     }
   }
 
@@ -133,47 +170,7 @@ class _MusicScreenState extends State<MusicScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا در پخش صوت: $e')),
-      );
-    }
-  }
-
-  Future<void> _downloadMusic(MusicMessageModel music) async {
-    await Permission.storage.request();
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.currentLanguage == 'fa' ? 'در حال دانلود و ذخیره موزیک...' : 'Downloading and saving music...')),
-      );
-
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        if (!directory.existsSync()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else {
-        directory = await getApplicationDocumentsDirectory();
-      }
-
-      String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-      String filePath = "${directory!.path}/$safeTitle.mp3";
-
-      Dio dio = Dio();
-      await dio.download(music.audioUrl, filePath);
-
-      setState(() {
-        music.isDownloaded = true;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.green,
-          content: Text(widget.currentLanguage == 'fa' ? 'موزیک با موفقیت ذخیره شد!' : 'Music successfully saved!'),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.redAccent, content: Text('خطا در دانلود فایل: $e')),
+        SnackBar(content: Text('خطا در پخش صوت')),
       );
     }
   }
@@ -181,7 +178,7 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: widget.currentLanguage == 'fa' ? TextDirection.rtl : TextDirection.ltr,
+      textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,
@@ -194,11 +191,11 @@ class _MusicScreenState extends State<MusicScreen> {
               ),
             ),
           ),
-          title: Row(
+          title: const Row(
             children: [
-              const Icon(Icons.headphones_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              Text(widget.currentLanguage == 'fa' ? 'کلاب موزیک نامیرا' : 'Namira Music Club', style: const TextStyle(color: Colors.white)),
+              Icon(Icons.headphones_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Text('کلاب موزیک نامیرا', style: TextStyle(color: Colors.white)),
             ],
           ),
           leading: IconButton(
@@ -232,7 +229,7 @@ class _MusicScreenState extends State<MusicScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-widget.currentLanguage == 'fa' ? 'اسم آهنگ یا خواننده رو بنویس تا برات پیدا کنم!' : 'Type song name or artist to find!',
+                              'اسم آهنگ یا خواننده رو بنویس تا فایلشو برات بفرستم!',
                               style: TextStyle(fontSize: 15, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
                               textAlign: TextAlign.center,
                             ),
@@ -337,12 +334,9 @@ widget.currentLanguage == 'fa' ? 'اسم آهنگ یا خواننده رو بن�
                                         ],
                                       ),
                                     ),
-                                    IconButton(
-                                      icon: Icon(
-                                        music.isDownloaded ? Icons.check_circle_rounded : Icons.download_rounded,
-                                        color: music.isDownloaded ? Colors.green : Colors.pinkAccent,
-                                      ),
-                                      onPressed: music.isDownloaded ? null : () => _downloadMusic(music),
+                                    Icon(
+                                      music.isDownloaded ? Icons.check_circle_rounded : Icons.download_done_rounded,
+                                      color: Colors.green,
                                     ),
                                   ],
                                 ),
@@ -363,7 +357,7 @@ widget.currentLanguage == 'fa' ? 'اسم آهنگ یا خواننده رو بن�
                         controller: _searchController,
                         style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
                         decoration: InputDecoration(
-                          hintText: widget.currentLanguage == 'fa' ? 'نام آهنگ یا خواننده را جستجو کنید...' : 'Search song or artist...',
+                          hintText: 'نام آهنگ یا خواننده را بنویس...',
                           hintStyle: TextStyle(color: widget.isDarkMode ? Colors.white54 : Colors.black45),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -381,7 +375,7 @@ widget.currentLanguage == 'fa' ? 'اسم آهنگ یا خواننده رو بن�
                         ),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.search_rounded, color: Colors.white),
+                        icon: const Icon(Icons.send_rounded, color: Colors.white),
                         onPressed: () => _searchAndSendMusic(_searchController.text),
                       ),
                     ),
@@ -394,4 +388,3 @@ widget.currentLanguage == 'fa' ? 'اسم آهنگ یا خواننده رو بن�
       ),
     );
   }
-}
