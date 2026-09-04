@@ -24,7 +24,7 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
 
-  final String _apiUrl = "https://amirhr1381.pythonanywhere.com/get_music";
+  final String _apiUrl = "https://namira-music-api.leoamirstar.workers.dev";
 
   @override
   void dispose() {
@@ -70,12 +70,12 @@ class _MusicScreenState extends State<MusicScreen> {
         String seconds = (durationSec % 60).toString().padLeft(2, '0');
         String formattedDuration = "$minutes:$seconds";
 
-        MusicMessageModel musicModel = MusicMessageModel(
-          title: data['title'] ?? 'بدون عنوان',
-          author: data['author'] ?? 'ناشناس',
-          audioUrl: data['audio_url'] ?? '',
-          duration: formattedDuration,
-        );
+              MusicMessageModel musicModel = MusicMessageModel(
+        title: data['title'] ?? 'بدون عنوان',
+        author: data['author'] ?? 'ناشناس',
+        audioUrl: data['audio_url'] ?? '',
+        duration: formattedDuration.isNotEmpty ? formattedDuration : '03:00',
+      );
 
         setState(() {
           _chatItems.add({
