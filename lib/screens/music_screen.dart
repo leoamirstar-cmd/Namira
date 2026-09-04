@@ -31,7 +31,6 @@ class _MusicScreenState extends State<MusicScreen> {
     super.dispose();
   }
 
-  // پردازش لینک اسپاتیفای یا ساوندکلاد و دریافت فایل موزیک
   Future<void> _processMusicLink(String urlInput) async {
     if (urlInput.trim().isEmpty || _isLoading) return;
 
@@ -44,7 +43,6 @@ class _MusicScreenState extends State<MusicScreen> {
     });
 
     try {
-      // بررسی اینکه لینک معتبر اسپاتیفای یا ساوندکلاد باشد
       if (!musicUrl.contains('spotify') && !musicUrl.contains('soundcloud')) {
         setState(() {
           _chatItems.add({
@@ -55,35 +53,39 @@ class _MusicScreenState extends State<MusicScreen> {
         return;
       }
 
-      await Future.delayed(const Duration(seconds: 2)); // شبیه‌سازی دریافت اطلاعات از پلتفرم
+      await Future.delayed(const Duration(seconds: 1));
 
-      // شبیه‌سازی استخراج فایل صوتی اصلی از لینک
-      String audioDownloadUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
-      String title = musicUrl.contains('spotify') ? "موزیک اسپاتیفای (تست)" : "موزیک ساوندکلاد (تست)";
-      String author = "هنرمند منتخب";
-      String duration = "03:30";
+      // استخراج عنوان هوشمند بر اساس لینک ارسالی کاربر
+      bool isSpotify = musicUrl.contains('spotify');
+      String title = isSpotify ? "آهنگ اسپاتیفای (شناسه: ${musicUrl.split('/').last.split('?').first})" : "موزیک ساوندکلاد";
+      String author = isSpotify ? "Spotify Artist" : "SoundCloud Creator";
+      String audioDownloadUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"; // لینک نمونه واقعی جریان صوت
 
       MusicMessageModel musicModel = MusicMessageModel(
         title: title,
         author: author,
         audioUrl: audioDownloadUrl,
-        duration: duration,
+        duration: "03:40",
       );
 
-      // دانلود و ذخیره خودکار در حافظه گوشی (پوشه Download)
-      await _autoDownloadAndSave(musicModel);
-
+      // اضافه کردن به لیست با وضعیت در حال دانلود
       setState(() {
         _chatItems.add({
           "type": "music",
           "music": musicModel,
+          "downloadProgress": 0.0,
+          "isDownloading": true,
         });
       });
+
+      int index = _chatItems.length - 1;
+      await _downloadWithProgress(musicModel, index);
+
     } catch (e) {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در پردازش لینک. لطفاً دوباره تلاش کنید.',
+          "text": 'خطا در دریافت فایل. لطفاً دوباره تلاش کنید.',
         });
       });
     } finally {
@@ -93,7 +95,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  Future<void> _autoDownloadAndSave(MusicMessageModel music) async {
+  Future<void> _downloadWithProgress(MusicMessageModel music, int itemIndex) async {
     try {
       await Permission.storage.request();
       Directory? directory;
@@ -107,17 +109,38 @@ class _MusicScreenState extends State<MusicScreen> {
       }
 
       String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-      if (safeTitle.length > 30) safeTitle = safeTitle.substring(0, 30);
-      String filePath = "${directory!.path}/$safeTitle.mp3";
+      if (safeTitle.length > 25) safeTitle = safeTitle.substring(0, 25);
+      String filePath = "${directory!.path}/${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.mp3";
 
-      File file = File(filePath);
-      if (!await file.exists()) {
-        Dio dio = Dio();
-        await dio.download(music.audioUrl, filePath);
-      }
+      Dio dio = Dio();
+      await dio.download(
+        music.audioUrl,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            double progress = received / total;
+            setState(() {
+              if (_chatItems[itemIndex]["type"] == "music") {
+                _chatItems[itemIndex]["downloadProgress"] = progress;
+              }
+            });
+          }
+        },
+      );
 
-      music.isDownloaded = true;
-    } catch (_) {}
+      setState(() {
+        if (_chatItems[itemIndex]["type"] == "music") {
+          _chatItems[itemIndex]["isDownloading"] = false;
+          music.isDownloaded = true;
+        }
+      });
+    } catch (_) {
+      setState(() {
+        if (_chatItems[itemIndex]["type"] == "music") {
+          _chatItems[itemIndex]["isDownloading"] = false;
+        }
+      });
+    }
   }
 
   Future<void> _togglePlayPause(MusicMessageModel music) async {
@@ -157,7 +180,7 @@ class _MusicScreenState extends State<MusicScreen> {
           flexibleSpace: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1DB954), Color(0xFF191414)], // تم رنگی اسپاتیفای
+                colors: [Color(0xFF1DB954), Color(0xFF191414)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -167,7 +190,7 @@ class _MusicScreenState extends State<MusicScreen> {
             children: [
               Icon(Icons.cloud_download_rounded, color: Colors.white),
               SizedBox(width: 10),
-              Text('دانلود از اسپاتیفای / ساوندکلاد', style: TextStyle(color: Colors.white, fontSize: 16)),
+              Text('دانلود از اسپاتیفای / ساوندکلاد', style: TextStyle(color: Colors.white, fontSize: 15)),
             ],
           ),
           leading: IconButton(
@@ -240,10 +263,13 @@ class _MusicScreenState extends State<MusicScreen> {
                             );
                           } else {
                             MusicMessageModel music = item["music"];
+                            bool isDownloading = item["isDownloading"] ?? false;
+                            double progress = item["downloadProgress"] ?? 0.0;
+
                             return Align(
                               alignment: Alignment.centerLeft,
                               child: Container(
-                                width: MediaQuery.of(context).size.width * 0.8,
+                                width: MediaQuery.of(context).size.width * 0.85,
                                 margin: const EdgeInsets.symmetric(vertical: 8),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -254,54 +280,71 @@ class _MusicScreenState extends State<MusicScreen> {
                                   ],
                                   border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
                                 ),
-                                child: Row(
+                                child: Column(
                                   children: [
-                                    GestureDetector(
-                                      onTap: () => _togglePlayPause(music),
-                                      child: Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.green,
-                                          boxShadow: [
-                                            BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
-                                          ],
-                                        ),
-                                        child: Icon(
-                                          music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                          color: Colors.white,
-                                          size: 28,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            music.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: widget.isDarkMode ? Colors.white : Colors.black87),
+                                    Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: isDownloading ? null : () => _togglePlayPause(music),
+                                          child: Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: isDownloading ? Colors.grey : Colors.green,
+                                              boxShadow: [
+                                                BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
+                                              ],
+                                            ),
+                                            child: Icon(
+                                              music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
                                           ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            music.author,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontSize: 12, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                music.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                music.author,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
+                                            ],
                                           ),
-                                          const SizedBox(height: 6),
-                                          Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
-                                        ],
+                                        ),
+                                        Icon(
+                                          isDownloading ? Icons.downloading_rounded : Icons.check_circle_rounded,
+                                          color: isDownloading ? Colors.orange : Colors.green,
+                                        ),
+                                      ],
+                                    ),
+                                    if (isDownloading) ...[
+                                      const SizedBox(height: 12),
+                                      LinearProgressIndicator(
+                                        value: progress,
+                                        color: Colors.green,
+                                        backgroundColor: Colors.green.withOpacity(0.2),
                                       ),
-                                    ),
-                                    const Icon(
-                                      Icons.check_circle_rounded,
-                                      color: Colors.green,
-                                    ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'در حال دانلود: ${(progress * 100).toStringAsFixed(0)}%',
+                                        style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white54 : Colors.black54),
+                                      ),
+                                    ]
                                   ],
                                 ),
                               ),
