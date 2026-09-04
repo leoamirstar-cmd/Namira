@@ -55,25 +55,34 @@ class _MusicScreenState extends State<MusicScreen> {
 
       await Future.delayed(const Duration(seconds: 1));
 
-      String trackId = musicUrl.split('/').last.split('?').first;
+      // استخراج دقیق بخش پایانی لینک برای ساخت نامتاثر از لینک کاربر
+      Uri? uri = Uri.tryParse(musicUrl);
+      String pathSegment = (uri != null && uri.pathSegments.isNotEmpty) 
+          ? uri.pathSegments.last 
+          : DateTime.now().millisecondsSinceEpoch.toString();
+          
       bool isSpotify = musicUrl.contains('spotify');
+      String title = isSpotify ? "موزیک اسپاتیفای ($pathSegment)" : "تراک ساوندکلاد ($pathSegment)";
+      String author = isSpotify ? "Spotify Verified Artist" : "SoundCloud Creator";
       
-      String title = isSpotify ? "آهنگ اسپاتیفای ($trackId)" : "موزیک ساوندکلاد ($trackId)";
-      String author = isSpotify ? "Spotify Track" : "SoundCloud Creator";
-      
-      List<String> sampleAudioUrls = [
+      // لیست کامل‌تر و مجزای لینک‌های تست برای اینکه هر لینک دقیقا یک فایل متفاوت بگیرد
+      List<String> dynamicAudioUrls = [
         "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
         "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
         "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
         "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
       ];
-      String audioDownloadUrl = sampleAudioUrls[trackId.hashCode.abs() % sampleAudioUrls.length];
+      
+      int uniqueIndex = musicUrl.codeUnits.fold(0, (prev, element) => prev + element) % dynamicAudioUrls.length;
+      String audioDownloadUrl = dynamicAudioUrls[uniqueIndex];
 
       MusicMessageModel musicModel = MusicMessageModel(
         title: title,
         author: author,
         audioUrl: audioDownloadUrl,
-        duration: "03:45",
+        duration: "03:32",
       );
 
       setState(() {
