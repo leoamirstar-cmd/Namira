@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dartg:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
@@ -24,7 +24,6 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
 
-  // آدرس سرور واقعی شما روی PythonAnywhere
   final String _apiUrl = "https://amirhr1381.pythonanywhere.com/get_music";
 
   @override
@@ -56,7 +55,6 @@ class _MusicScreenState extends State<MusicScreen> {
         return;
       }
 
-      // ارسال درخواست POST به سرور پایتون
       Dio dio = Dio();
       var response = await dio.post(
         _apiUrl,
@@ -67,7 +65,6 @@ class _MusicScreenState extends State<MusicScreen> {
       if (response.statusCode == 200 && response.data != null) {
         var data = response.data;
         
-        // تبدیل زمان از ثانیه به دقیقه:ثانیه
         int durationSec = int.tryParse(data['duration'].toString()) ?? 0;
         String minutes = (durationSec ~/ 60).toString().padLeft(2, '0');
         String seconds = (durationSec % 60).toString().padLeft(2, '0');
@@ -94,15 +91,14 @@ class _MusicScreenState extends State<MusicScreen> {
       } else {
         throw Exception("خطا در پاسخ سرور");
       }
-  } catch (e) {
-  setState(() {
-    _chatItems.add({
-      "type": "system",
-      "text": 'خطا: $e',
-    });
-  });
-}
 
+    } catch (e) {
+      setState(() {
+        _chatItems.add({
+          "type": "system",
+          "text": 'خطا: $e',
+        });
+      });
     } finally {
       setState(() {
         _isLoading = false;
