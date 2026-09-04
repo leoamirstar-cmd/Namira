@@ -74,7 +74,6 @@ class _MusicScreenState extends State<MusicScreen> {
               ? "${validVideo.duration!.inMinutes}:${(validVideo.duration!.inSeconds % 60).toString().padLeft(2, '0')}" 
               : "03:30";
 
-          // ساخت مدل پیام موزیک که فایل رو آماده تحویل می‌کنه
           MusicMessageModel musicModel = MusicMessageModel(
             title: title,
             author: author,
@@ -82,7 +81,6 @@ class _MusicScreenState extends State<MusicScreen> {
             duration: duration,
           );
 
-          // به صورت خودکار فایل رو دانلود و ذخیره می‌کنیم تا کاملاً آماده باشه
           await _autoDownloadAndSave(musicModel);
 
           setState(() {
@@ -117,7 +115,6 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // متد برای ذخیره خودکار فایل صوتی در حافظه گوشی
   Future<void> _autoDownloadAndSave(MusicMessageModel music) async {
     try {
       await Permission.storage.request();
@@ -135,7 +132,6 @@ class _MusicScreenState extends State<MusicScreen> {
       if (safeTitle.length > 30) safeTitle = safeTitle.substring(0, 30);
       String filePath = "${directory!.path}/$safeTitle.mp3";
 
-      // اگر از قبل دانلود نشده بود، فایل رو دانلود می‌کنیم
       File file = File(filePath);
       if (!await file.exists()) {
         Dio dio = Dio();
@@ -143,9 +139,7 @@ class _MusicScreenState extends State<MusicScreen> {
       }
 
       music.isDownloaded = true;
-    } catch (_) {
-      // اگر دانلود خودکار در پس‌زمینه ارور داد، کاربر خودش می‌تونه دستی دکمه دانلود رو بزنه
-    }
+    } catch (_) {}
   }
 
   Future<void> _togglePlayPause(MusicMessageModel music) async {
@@ -170,7 +164,7 @@ class _MusicScreenState extends State<MusicScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا در پخش صوت')),
+        const SnackBar(content: Text('خطا در پخش صوت')),
       );
     }
   }
@@ -334,8 +328,8 @@ class _MusicScreenState extends State<MusicScreen> {
                                         ],
                                       ),
                                     ),
-                                    Icon(
-                                      music.isDownloaded ? Icons.check_circle_rounded : Icons.download_done_rounded,
+                                    const Icon(
+                                      Icons.check_circle_rounded,
                                       color: Colors.green,
                                     ),
                                   ],
@@ -388,3 +382,4 @@ class _MusicScreenState extends State<MusicScreen> {
       ),
     );
   }
+}
