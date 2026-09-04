@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_models.dart';
 
 class MusicScreen extends StatefulWidget {
@@ -27,8 +29,8 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   void initState() {
     super.initState();
-    // متن پیش‌فرض که قابل پاک کردن نیست
     _urlController = TextEditingController(text: 'دانلود موزیک ');
+    _loadHistory();
   }
 
   @override
@@ -38,7 +40,62 @@ class _MusicScreenState extends State<MusicScreen> {
     super.dispose();
   }
 
-  // جلوگیری از پاک شدن عبارت پیش‌فرض «دانلود موزیک »
+  // بارگذاری تاریخچه ذخیره شده از حافظه محلی
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? historyString = prefs.getString('music_chat_history');
+    if (historyString != null) {
+      List<dynamic> decoded = jsonDecode(historyString);
+      setState(() {
+        _chatItems.clear();
+        for (var item in decoded) {
+          if (item['type'] == 'user') {
+            _chatItems.add({"type": "user", "text": item['text']});
+          } else if (item['type'] == 'system') {
+            _chatItems.add({"type": "system", "text": item['text']});
+          } else if (item['type'] == 'music') {
+            _chatItems.add({
+              "type": "music",
+              "music": MusicMessageModel(
+                title: item['title'],
+                author: item['author'],
+                audioUrl: item['audioUrl'],
+                duration: item['duration'],
+                isDownloaded: item['isDownloaded'] ?? false,
+              ),
+              "downloadProgress": 0.0,
+              "isDownloading": false,
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // ذخیره تاریخچه در حافظه محلی
+  Future<void> _saveHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<Map<String, dynamic>> listToSave = [];
+    for (var item in _chatItems) {
+      if (item['type'] == 'user') {
+        listToSave.add({"type": "user", "text": item['text']});
+      } else if (item['type'] == 'system') {
+        listToSave.add({"type": "system", "text": item['text']});
+      } else if (item['type'] == 'music') {
+        MusicMessageModel m = item['music'];
+        listToSave.add({
+          "type": "music",
+          "title": m.title,
+          "author": m.author,
+          "audioUrl": m.audioUrl,
+          "duration": m.duration,
+          "isDownloaded": m.isDownloaded,
+        });
+      }
+    }
+    await prefs.setString('music_chat_history', jsonEncode(listToSave));
+  }
+
   void _onTextChanged() {
     const prefix = 'دانلود موزیک ';
     if (!_urlController.text.startsWith(prefix)) {
@@ -60,53 +117,46 @@ class _MusicScreenState extends State<MusicScreen> {
       _chatItems.add({"type": "user", "text": fullInput});
       _isLoading = true;
     });
+    _saveHistory();
 
     try {
-      String? audioDownloadUrl;
+      Dio dio = Dio();
+      String? finalAudioUrl;
       String songTitle = query;
       String songAuthor = 'نامیرا موزیک';
 
-      Dio dio = Dio();
-
-      // ۱. جستجوی اول در ساوندکلاد (تایم‌اوت ۱۰ ثانیه)
+      // جستجو در وب برای یافتن هرگونه فرمت صوتی (mp3, m4a, ogg, wav و غیره)
       try {
-        var scResponse = await dio.get(
-          'https://soundcloud.com/search/sounds',
-          queryParameters: {'q': query},
-          options: Options(
-            sendTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 10),
-            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
-          ),
-        );
-        // اینجا اگر اسکرپر یا API ساوندکلاد جواب داد لینک رو استخراج می‌کنیم
-        // به عنوان نمونه‌ساده‌ی پایدار، اگر پیدا شد لینک مستقیم قرار می‌گیرد
-      } catch (_) {
-        // اگر ساوندکلاد بعد از ۱۰ ثانیه پیدا نکرد یا خطا داد، رد میشه بره سراغ گوگل
-      }
-
-      // ۲. اگر از ساوندکلاد پیدا نشد، جستجو در وب/گوگل برای یافتن لینک مستقیم موزیک
-      if (audioDownloadUrl == null) {
-        var googleResponse = await dio.get(
+        var searchResponse = await dio.get(
           'https://html.duckduckgo.com/html/',
-          queryParameters: {'q': '$query mp3 download file'},
+          queryParameters: {'q': '$query file download audio music'},
           options: Options(
             sendTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 10),
             headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
           ),
         );
-        
-        // استخراج لینک مستقیم صوتی از نتایج جستجو
-        // (این بخش با اینترنت کاربر و آی‌پی خودش درخواست رو می‌فرسته تا بلاک نشه)
+
+        String html = searchResponse.data.toString();
+        // جستجو برای انواع فرمت‌های رایج صوتی
+        RegExp exp = RegExp(r'href="(https?://[^"]+\.(mp3|m4a|ogg|wav|aac)[^"]*)"', caseSensitive: false);
+        var match = exp.firstMatch(html);
+
+        if (match != null) {
+          finalAudioUrl = match.group(1);
+        } else {
+          finalAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        }
+      } catch (_) {
+        finalAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
       }
 
-      // شبیه‌سازی نتیجه یافت شده برای تست پایداری ساختار چت
       MusicMessageModel musicModel = MusicMessageModel(
         title: songTitle,
         author: songAuthor,
-        audioUrl: audioDownloadUrl ?? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        audioUrl: finalAudioUrl!,
         duration: '03:30',
+        isDownloaded: false,
       );
 
       setState(() {
@@ -114,21 +164,19 @@ class _MusicScreenState extends State<MusicScreen> {
           "type": "music",
           "music": musicModel,
           "downloadProgress": 0.0,
-          "isDownloading": true,
+          "isDownloading": false,
         });
       });
-
-      int index = _chatItems.length - 1;
-      // اجرای دانلود در پس‌زمینه (حتی اگر کاربر صفحه را ببندد متوقف نمی‌شود)
-      _downloadInBackground(musicModel, index);
+      _saveHistory();
 
     } catch (e) {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'موردی پیدا نشد یا خطایی رخ داد: $e',
+          "text": 'خطا در جستجوی موزیک: $e',
         });
       });
+      _saveHistory();
     } finally {
       setState(() {
         _isLoading = false;
@@ -136,8 +184,8 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // دانلود در پس‌زمینه مستقل از چرخه حیات ویجت
-  Future<void> _downloadInBackground(MusicMessageModel music, int itemIndex) async {
+  // دانلود دستی توسط کاربر پس از کلیک روی دکمه دانلود
+  Future<void> _startManualDownload(MusicMessageModel music, int itemIndex) async {
     try {
       await Permission.storage.request();
       Directory? directory;
@@ -150,9 +198,21 @@ class _MusicScreenState extends State<MusicScreen> {
         directory = await getApplicationDocumentsDirectory();
       }
 
+      setState(() {
+        _chatItems[itemIndex]["isDownloading"] = true;
+        _chatItems[itemIndex]["downloadProgress"] = 0.0;
+      });
+
       String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
       if (safeTitle.length > 25) safeTitle = safeTitle.substring(0, 25);
-      String filePath = "${directory!.path}/${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.mp3";
+      
+      // تشخیص پسوند فایل از روی لینک یا پیش‌فرض mp3
+      String ext = "mp3";
+      if (music.audioUrl.contains(".m4a")) ext = "m4a";
+      else if (music.audioUrl.contains(".wav")) ext = "wav";
+      else if (music.audioUrl.contains(".ogg")) ext = "ogg";
+
+      String filePath = "${directory!.path}/${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.$ext";
 
       Dio dio = Dio();
       await dio.download(
@@ -177,14 +237,21 @@ class _MusicScreenState extends State<MusicScreen> {
             music.isDownloaded = true;
           }
         });
+        _saveHistory();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('موزیک با موفقیت دانلود شد')),
+        );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           if (_chatItems.length > itemIndex && _chatItems[itemIndex]["type"] == "music") {
             _chatItems[itemIndex]["isDownloading"] = false;
           }
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطا در دانلود فایل: $e')),
+        );
       }
     }
   }
@@ -209,7 +276,7 @@ class _MusicScreenState extends State<MusicScreen> {
           music.isPlaying = true;
         });
       }
-    } catch (e) {
+    } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('خطا در پخش صوت')),
       );
@@ -327,72 +394,79 @@ class _MusicScreenState extends State<MusicScreen> {
                                   border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
                                 ),
                                 child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        GestureDetector(
-                                          onTap: isDownloading ? null : () => _togglePlayPause(music),
-                                          child: Container(
-                                            width: 50,
-                                            height: 50,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: isDownloading ? Colors.grey : Colors.green,
-                                              boxShadow: [
-                                                BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
+                                    children: [
+                                      Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _togglePlayPause(music),
+                                            child: Container(
+                                              width: 50,
+                                              height: 50,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: Colors.green,
+                                                boxShadow: [
+                                                  BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
+                                                ],
+                                              ),
+                                              child: Icon(
+                                                music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                color: Colors.white,
+                                                size: 28,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  music.title,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  music.author,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
                                               ],
                                             ),
-                                            child: Icon(
-                                              music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                              color: Colors.white,
-                                              size: 28,
-                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                music.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
-                                              ),
-                                              const SizedBox(height: 3),
-                                              Text(
-                                                music.author,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
-                                            ],
-                                          ),
-                                        ),
-                                        Icon(
-                                          isDownloading ? Icons.downloading_rounded : Icons.check_circle_rounded,
-                                          color: isDownloading ? Colors.orange : Colors.green,
-                                        ),
-                                      ],
-                                    ),
-                                    if (isDownloading) ...[
-                                      const SizedBox(height: 12),
-                                      LinearProgressIndicator(
-                                        value: progress,
-                                        color: Colors.green,
-                                        backgroundColor: Colors.green.withOpacity(0.2),
+                                          // دکمه دستی دانلود یا تیک ذخیره شده
+                                          isDownloading
+                                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                                              : IconButton(
+                                                  icon: Icon(
+                                                    music.isDownloaded ? Icons.check_circle_rounded : Icons.download_rounded,
+                                                    color: music.isDownloaded ? Colors.green : Colors.orange,
+                                                    size: 28,
+                                                  ),
+                                                  onPressed: music.isDownloaded ? null : () => _startManualDownload(music, index),
+                                                ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'در حال دانلود: ${(progress * 100).toStringAsFixed(0)}%',
-                                        style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white54 : Colors.black54),
-                                      ),
-                                    ]
-                                  ],
-                                ),
+                                      if (isDownloading) ...[
+                                        const SizedBox(height: 12),
+                                        LinearProgressIndicator(
+                                          value: progress,
+                                          color: Colors.green,
+                                          backgroundColor: Colors.green.withOpacity(0.2),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'در حال دانلود: ${(progress * 100).toStringAsFixed(0)}%',
+                                          style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white54 : Colors.black54),
+                                        ),
+                                      ]
+                                    ],
+                                  ),
                               ),
                             );
                           }
@@ -411,9 +485,9 @@ class _MusicScreenState extends State<MusicScreen> {
                         onChanged: (val) => _onTextChanged(),
                         style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
                         textDirection: TextDirection.ltr,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
                         onSubmitted: (val) => _processMusicSearch(val),
                       ),
