@@ -126,11 +126,14 @@ class _MusicScreenState extends State<MusicScreen> {
 
     try {
       Dio dio = Dio();
-      // درخواست به سرور پایتون روی رندر برای دریافت لینک تمام فرمت‌های صوتی
+      // تایم‌اوت ۲ دقیقه‌ای برای بیدار شدن سرور رایگان رندر
       var response = await dio.get(
         '$_serverBaseUrl/search',
         queryParameters: {'q': query},
-        options: Options(receiveTimeout: const Duration(seconds: 15)),
+        options: Options(
+          receiveTimeout: const Duration(minutes: 2),
+          sendTimeout: const Duration(minutes: 2),
+        ),
       );
 
       String audioUrl = '';
@@ -166,7 +169,7 @@ class _MusicScreenState extends State<MusicScreen> {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در ارتباط با سرور موزیک',
+          "text": 'خطا در ارتباط با سرور موزیک (سرور در حال بیدار شدن است، دوباره تلاش کنید)',
         });
       });
       _saveHistory();
@@ -281,6 +284,13 @@ class _MusicScreenState extends State<MusicScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // استخراج لیست جستجوهای قبلی کاربر برای نمایش در منوی کشویی بالای صفحه
+    List<String> searchHistory = _chatItems
+        .where((item) => item["type"] == "user")
+        .map((item) => item["text"].toString().replaceFirst('دانلود موزیک ', ''))
+        .toSet()
+        .toList();
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -292,14 +302,44 @@ class _MusicScreenState extends State<MusicScreen> {
                 colors: [Color(0xFF1DB954), Color(0xFF191414)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-              ),
+                ),
             ),
           ),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.headphones_rounded, color: Colors.white),
-              SizedBox(width: 10),
-              Text('کلاب دانلود موزیک', style: TextStyle(color: Colors.white, fontSize: 15)),
+              const Icon(Icons.headphones_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              const Text('کلاب دانلود موزیک', style: TextStyle(color: Colors.white, fontSize: 15)),
+              const Spacer(),
+              // منوی کشویی تاریخچه جستجوها در بالای صفحه
+              if (searchHistory.isNotEmpty)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.history_rounded, color: Colors.white),
+                  tooltip: 'تاریخچه جستجوها',
+                  onSelected: (String selectedQuery) {
+                    _processMusicSearch('دانلود موزیک $selectedQuery');
+                  },
+                  itemBuilder: (BuildContext context) {
+                    return searchHistory.map((String query) {
+                      return PopupMenuItem<String>(
+                        value: query,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, size: 16, color: Colors.green),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                query,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
             ],
           ),
           leading: IconButton(
@@ -341,7 +381,7 @@ class _MusicScreenState extends State<MusicScreen> {
                         ),
                       )
                     : ListView.builder(
-                      padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         itemCount: _chatItems.length,
                         itemBuilder: (context, index) {
                           var item = _chatItems[index];
@@ -367,7 +407,7 @@ class _MusicScreenState extends State<MusicScreen> {
                                   color: Colors.grey.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Text(item["text"], style: TextStyle(color: widget.isDarkMode ? Colors.white60 : Colors.black54, fontSize: 13)),
+                                child: Text(item["text"], style: TextStyle(color: widget.isDarkMode ? Colors.white60 : Colors.black54, fontSize: 13), textAlign: TextAlign.center),
                               ),
                             );
                           } else {
