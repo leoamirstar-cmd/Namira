@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -18,7 +17,7 @@ class MusicScreen extends StatefulWidget {
 }
 
 class _MusicScreenState extends State<MusicScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _urlController = TextEditingController();
   final List<Map<String, dynamic>> _chatItems = [];
   bool _isLoading = false;
   
@@ -28,87 +27,66 @@ class _MusicScreenState extends State<MusicScreen> {
   @override
   void dispose() {
     _audioPlayer.dispose();
-    _searchController.dispose();
+    _urlController.dispose();
     super.dispose();
   }
 
-  Future<void> _searchAndSendMusic(String query) async {
-    if (query.trim().isEmpty || _isLoading) return;
+  // پردازش لینک اسپاتیفای یا ساوندکلاد و دریافت فایل موزیک
+  Future<void> _processMusicLink(String urlInput) async {
+    if (urlInput.trim().isEmpty || _isLoading) return;
 
-    String searchQuery = query.trim();
-    _searchController.clear();
+    String musicUrl = urlInput.trim();
+    _urlController.clear();
 
     setState(() {
-      _chatItems.add({"type": "user", "text": searchQuery});
+      _chatItems.add({"type": "user", "text": musicUrl});
       _isLoading = true;
     });
 
-    yt.YoutubeExplode? ytInstance;
     try {
-      ytInstance = yt.YoutubeExplode();
-      var searchResults = await ytInstance.search.search(searchQuery);
-
-      if (searchResults.isNotEmpty) {
-        yt.Video? validVideo;
-        yt.StreamManifest? manifest;
-
-        for (var video in searchResults.take(3)) {
-          try {
-            var tempManifest = await ytInstance.videos.streamsClient.getManifest(video.id);
-            if (tempManifest.audioOnly.isNotEmpty) {
-              validVideo = video;
-              manifest = tempManifest;
-              break;
-            }
-          } catch (_) {
-            continue;
-          }
-        }
-
-        if (validVideo != null && manifest != null) {
-          var audioStream = manifest.audioOnly.withHighestBitrate();
-          String audioUrl = audioStream.url.toString();
-          String title = validVideo.title;
-          String author = validVideo.author;
-          String duration = validVideo.duration != null 
-              ? "${validVideo.duration!.inMinutes}:${(validVideo.duration!.inSeconds % 60).toString().padLeft(2, '0')}" 
-              : "03:30";
-
-          MusicMessageModel musicModel = MusicMessageModel(
-            title: title,
-            author: author,
-            audioUrl: audioUrl,
-            duration: duration,
-          );
-
-          await _autoDownloadAndSave(musicModel);
-
-          setState(() {
-            _chatItems.add({
-              "type": "music",
-              "music": musicModel,
-            });
-          });
-        } else {
-          throw Exception("موزیک یافت نشد");
-        }
-      } else {
+      // بررسی اینکه لینک معتبر اسپاتیفای یا ساوندکلاد باشد
+      if (!musicUrl.contains('spotify') && !musicUrl.contains('soundcloud')) {
         setState(() {
           _chatItems.add({
             "type": "system",
-            "text": 'موزیکی با این مشخصات پیدا نشد!',
+            "text": 'لطفاً یک لینک معتبر از اسپاتیفای یا ساوندکلاد ارسال کنید!',
           });
         });
+        return;
       }
+
+      await Future.delayed(const Duration(seconds: 2)); // شبیه‌سازی دریافت اطلاعات از پلتفرم
+
+      // شبیه‌سازی استخراج فایل صوتی اصلی از لینک
+      String audioDownloadUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3";
+      String title = musicUrl.contains('spotify') ? "موزیک اسپاتیفای (تست)" : "موزیک ساوندکلاد (تست)";
+      String author = "هنرمند منتخب";
+      String duration = "03:30";
+
+      MusicMessageModel musicModel = MusicMessageModel(
+        title: title,
+        author: author,
+        audioUrl: audioDownloadUrl,
+        duration: duration,
+      );
+
+      // دانلود و ذخیره خودکار در حافظه گوشی (پوشه Download)
+      await _autoDownloadAndSave(musicModel);
+
+      setState(() {
+        _chatItems.add({
+          "type": "music",
+          "music": musicModel,
+        });
+      });
     } catch (e) {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در دریافت موزیک. لطفاً دوباره تلاش کنید.',
+          "text": 'خطا در پردازش لینک. لطفاً دوباره تلاش کنید.',
         });
       });
     } finally {
-      ytInstance?.close();
       setState(() {
         _isLoading = false;
       });
@@ -179,7 +157,7 @@ class _MusicScreenState extends State<MusicScreen> {
           flexibleSpace: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
+                colors: [Color(0xFF1DB954), Color(0xFF191414)], // تم رنگی اسپاتیفای
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -187,9 +165,9 @@ class _MusicScreenState extends State<MusicScreen> {
           ),
           title: const Row(
             children: [
-              Icon(Icons.headphones_rounded, color: Colors.white),
+              Icon(Icons.cloud_download_rounded, color: Colors.white),
               SizedBox(width: 10),
-              Text('کلاب موزیک نامیرا', style: TextStyle(color: Colors.white)),
+              Text('دانلود از اسپاتیفای / ساوندکلاد', style: TextStyle(color: Colors.white, fontSize: 16)),
             ],
           ),
           leading: IconButton(
@@ -214,17 +192,17 @@ class _MusicScreenState extends State<MusicScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
-                                  colors: [Colors.pinkAccent.withOpacity(0.2), Colors.purpleAccent.withOpacity(0.2)],
+                                  colors: [Colors.green.withOpacity(0.2), Colors.black.withOpacity(0.2)],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                               ),
-                              child: const Icon(Icons.music_note_rounded, size: 64, color: Colors.pinkAccent),
+                              child: const Icon(Icons.link_rounded, size: 64, color: Colors.green),
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'اسم آهنگ یا خواننده رو بنویس تا فایلشو برات بفرستم!',
-                              style: TextStyle(fontSize: 15, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
+                              'لینک آهنگ اسپاتیفای یا ساوندکلاد رو بفرست تا فایلو بهت بدم!',
+                              style: TextStyle(fontSize: 14, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -242,14 +220,10 @@ class _MusicScreenState extends State<MusicScreen> {
                                 margin: const EdgeInsets.symmetric(vertical: 6),
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                 decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
+                                  color: Colors.green.shade700,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 15)),
+                                child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 13), textDirection: TextDirection.ltr),
                               ),
                             );
                           } else if (item["type"] == "system") {
@@ -278,7 +252,7 @@ class _MusicScreenState extends State<MusicScreen> {
                                   boxShadow: [
                                     BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3)),
                                   ],
-                                  border: Border.all(color: Colors.pinkAccent.withOpacity(0.3), width: 1),
+                                  border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
                                 ),
                                 child: Row(
                                   children: [
@@ -289,13 +263,9 @@ class _MusicScreenState extends State<MusicScreen> {
                                         height: 50,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          gradient: const LinearGradient(
-                                            colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
+                                          color: Colors.green,
                                           boxShadow: [
-                                            BoxShadow(color: Colors.pinkAccent.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
+                                            BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
                                           ],
                                         ),
                                         child: Icon(
@@ -324,7 +294,7 @@ class _MusicScreenState extends State<MusicScreen> {
                                             style: TextStyle(fontSize: 12, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
                                           ),
                                           const SizedBox(height: 6),
-                                          Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.pinkAccent)),
+                                          Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
                                         ],
                                       ),
                                     ),
@@ -340,7 +310,7 @@ class _MusicScreenState extends State<MusicScreen> {
                         },
                       ),
               ),
-              if (_isLoading) const LinearProgressIndicator(color: Colors.pinkAccent),
+              if (_isLoading) const LinearProgressIndicator(color: Colors.green),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 color: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
@@ -348,29 +318,26 @@ class _MusicScreenState extends State<MusicScreen> {
                   children: [
                     Expanded(
                       child: TextField(
-                        controller: _searchController,
+                        controller: _urlController,
                         style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
+                        textDirection: TextDirection.ltr,
                         decoration: InputDecoration(
-                          hintText: 'نام آهنگ یا خواننده را بنویس...',
-                          hintStyle: TextStyle(color: widget.isDarkMode ? Colors.white54 : Colors.black45),
+                          hintText: 'لینک Spotify یا SoundCloud را اینجا بفرستید...',
+                          hintStyle: TextStyle(color: widget.isDarkMode ? Colors.white54 : Colors.black45, fontSize: 13),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                         ),
-                        onSubmitted: (val) => _searchAndSendMusic(val),
+                        onSubmitted: (val) => _processMusicLink(val),
                       ),
                     ),
                     Container(
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: Colors.green,
                       ),
                       child: IconButton(
                         icon: const Icon(Icons.send_rounded, color: Colors.white),
-                        onPressed: () => _searchAndSendMusic(_searchController.text),
+                        onPressed: () => _processMusicLink(_urlController.text),
                       ),
                     ),
                   ],
