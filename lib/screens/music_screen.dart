@@ -24,7 +24,7 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
 
-  final String _apiUrl = "https://namira-music-api.leoamirstar.workers.dev";
+  final String _apiUrl = 'https://music-extractor.onrender.com';
 
   @override
   void dispose() {
