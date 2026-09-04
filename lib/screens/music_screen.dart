@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:dio/dio.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/chat_models.dart';
 
 class MusicScreen extends StatefulWidget {
@@ -23,13 +24,13 @@ class _MusicScreenState extends State<MusicScreen> {
   
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
-
-  final String _apiUrl = 'https://music-extractor.onrender.com';
+  final YoutubeExplode _yt = YoutubeExplode();
 
   @override
   void dispose() {
     _audioPlayer.dispose();
     _urlController.dispose();
+    _yt.close();
     super.dispose();
   }
 
@@ -45,58 +46,62 @@ class _MusicScreenState extends State<MusicScreen> {
     });
 
     try {
-      if (!musicUrl.contains('spotify') && !musicUrl.contains('soundcloud')) {
+      if (!musicUrl.contains('spotify') && !musicUrl.contains('soundcloud') && !musicUrl.contains('youtube') && !musicUrl.contains('youtu.be')) {
         setState(() {
           _chatItems.add({
             "type": "system",
-            "text": 'لطفاً یک لینک معتبر از اسپاتیفای یا ساوندکلاد ارسال کنید!',
+            "text": 'لطفاً یک لینک معتبر از اسپاتیفای، ساوندکلاد یا یوتیوب ارسال کنید!',
           });
         });
         return;
       }
 
-      Dio dio = Dio();
-      var response = await dio.post(
-        _apiUrl,
-        data: {"url": musicUrl},
-        options: Options(headers: {"Content-Type": "application/json"}),
-      );
-
-      if (response.statusCode == 200 && response.data != null) {
-        var data = response.data;
-        
-        int durationSec = int.tryParse(data['duration'].toString()) ?? 0;
-        String minutes = (durationSec ~/ 60).toString().padLeft(2, '0');
-        String seconds = (durationSec % 60).toString().padLeft(2, '0');
-        String formattedDuration = "$minutes:$seconds";
-
-              MusicMessageModel musicModel = MusicMessageModel(
-        title: data['title'] ?? 'بدون عنوان',
-        author: data['author'] ?? 'ناشناس',
-        audioUrl: data['audio_url'] ?? '',
-        duration: formattedDuration.isNotEmpty ? formattedDuration : '03:00',
-      );
-
-        setState(() {
-          _chatItems.add({
-            "type": "music",
-            "music": musicModel,
-            "downloadProgress": 0.0,
-            "isDownloading": true,
-          });
-        });
-
-        int index = _chatItems.length - 1;
-        await _downloadWithProgress(musicModel, index);
-      } else {
-        throw Exception("خطا در پاسخ سرور");
+      // استفاده از YoutubeExplode برای جستجو و استخراج مستقیم جریان صوت روی گوشی کاربر
+      String searchQuery = musicUrl;
+      if (musicUrl.contains('spotify')) {
+        searchQuery = "audio from spotify track $musicUrl";
+      } else if (musicUrl.contains('soundcloud')) {
+        searchQuery = "audio from soundcloud $musicUrl";
       }
+
+      var videoQuery = await _yt.search.search(searchQuery);
+      if (videoQuery.isEmpty) {
+        throw Exception("موزیکی برای این لینک پیدا نشد.");
+      }
+
+      var video = videoQuery.first;
+      var manifest = await _yt.videos.streamsClient.getManifest(video.id);
+      var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
+
+      int durationSec = video.duration?.inSeconds ?? 180;
+      String minutes = (durationSec ~/ 60).toString().padLeft(2, '0');
+      String seconds = (durationSec % 60).toString().padLeft(2, '0');
+      String formattedDuration = "$minutes:$seconds";
+
+      MusicMessageModel musicModel = MusicMessageModel(
+        title: video.title,
+        author: video.author,
+        audioUrl: audioStreamInfo.url.toString(),
+        duration: formattedDuration,
+      );
+
+      setState(() {
+        _chatItems.add({
+          "type": "music",
+          "music": musicModel,
+          "downloadProgress": 0.0,
+          "isDownloading": true,
+        });
+      });
+
+      int index = _chatItems.length - 1;
+      await _downloadWithProgress(musicModel, index, audioStreamInfo.url.toString());
 
     } catch (e) {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا: $e',
+          "text": 'خطا در استخراج موزیک: $e',
         });
       });
     } finally {
@@ -106,7 +111,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  Future<void> _downloadWithProgress(MusicMessageModel music, int itemIndex) async {
+  Future<void> _downloadWithProgress(MusicMessageModel music, int itemIndex, String streamUrl) async {
     try {
       await Permission.storage.request();
       Directory? directory;
@@ -125,7 +130,7 @@ class _MusicScreenState extends State<MusicScreen> {
 
       Dio dio = Dio();
       await dio.download(
-        music.audioUrl,
+        streamUrl,
         filePath,
         onReceiveProgress: (received, total) {
           if (total != -1) {
