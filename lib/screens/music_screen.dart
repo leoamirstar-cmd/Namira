@@ -136,7 +136,7 @@ class _MusicScreenState extends State<MusicScreen> {
         ),
       );
 
-      String audioUrl = '';
+            String audioUrl = '';
       String title = query;
       
       if (response.statusCode == 200 && response.data != null) {
@@ -144,7 +144,13 @@ class _MusicScreenState extends State<MusicScreen> {
       }
 
       if (audioUrl.isEmpty) {
-        audioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        setState(() {
+          _chatItems.add({
+            "type": "system",
+            "text": 'موزیک مورد نظر پیدا نشد!',
+          });
+        });
+        return;
       }
 
       MusicMessageModel musicModel = MusicMessageModel(
@@ -156,6 +162,15 @@ class _MusicScreenState extends State<MusicScreen> {
       );
 
       setState(() {
+        _chatItems.add({
+          "type": "music",
+          "music": musicModel,
+          "downloadProgress": 0.0,
+          "isDownloading": false,
+        });
+      });
+      _saveHistory();
+
         _chatItems.add({
           "type": "music",
           "music": musicModel,
