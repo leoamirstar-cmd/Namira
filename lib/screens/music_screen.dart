@@ -55,20 +55,27 @@ class _MusicScreenState extends State<MusicScreen> {
 
       await Future.delayed(const Duration(seconds: 1));
 
-      // استخراج عنوان هوشمند بر اساس لینک ارسالی کاربر
+      String trackId = musicUrl.split('/').last.split('?').first;
       bool isSpotify = musicUrl.contains('spotify');
-      String title = isSpotify ? "آهنگ اسپاتیفای (شناسه: ${musicUrl.split('/').last.split('?').first})" : "موزیک ساوندکلاد";
-      String author = isSpotify ? "Spotify Artist" : "SoundCloud Creator";
-      String audioDownloadUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"; // لینک نمونه واقعی جریان صوت
+      
+      String title = isSpotify ? "آهنگ اسپاتیفای ($trackId)" : "موزیک ساوندکلاد ($trackId)";
+      String author = isSpotify ? "Spotify Track" : "SoundCloud Creator";
+      
+      List<String> sampleAudioUrls = [
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+      ];
+      String audioDownloadUrl = sampleAudioUrls[trackId.hashCode.abs() % sampleAudioUrls.length];
 
       MusicMessageModel musicModel = MusicMessageModel(
         title: title,
         author: author,
         audioUrl: audioDownloadUrl,
-        duration: "03:40",
+        duration: "03:45",
       );
 
-      // اضافه کردن به لیست با وضعیت در حال دانلود
       setState(() {
         _chatItems.add({
           "type": "music",
