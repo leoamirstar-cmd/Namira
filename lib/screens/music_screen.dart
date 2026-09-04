@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_models.dart';
@@ -45,7 +44,7 @@ class _MusicScreenState extends State<MusicScreen> {
   Future<void> _loadHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? historyString = prefs.getString('music_chat_history_v3');
+      final String? historyString = prefs.getString('music_chat_history_v4');
       if (historyString != null) {
         List<dynamic> decoded = jsonDecode(historyString);
         setState(() {
@@ -62,7 +61,7 @@ class _MusicScreenState extends State<MusicScreen> {
                   title: item['title'] ?? 'موزیک',
                   author: item['author'] ?? 'نامیرا موزیک',
                   audioUrl: item['audioUrl'] ?? '',
-                  duration: item['duration'] ?? '03:30',
+                  duration: item['duration'] ?? '00:30',
                   isDownloaded: item['isDownloaded'] ?? false,
                 ),
                 "downloadProgress": 0.0,
@@ -96,7 +95,7 @@ class _MusicScreenState extends State<MusicScreen> {
           });
         }
       }
-      await prefs.setString('music_chat_history_v3', jsonEncode(listToSave));
+      await prefs.setString('music_chat_history_v4', jsonEncode(listToSave));
     } catch (_) {}
   }
 
@@ -135,10 +134,15 @@ class _MusicScreenState extends State<MusicScreen> {
       );
 
       String audioUrl = '';
-      String title = query;
+      String trackTitle = query;
+      String trackAuthor = 'نامیرا موزیک';
+      String trackDuration = '00:30';
       
       if (response.statusCode == 200 && response.data != null) {
         audioUrl = response.data['url'] ?? '';
+        trackTitle = response.data['title'] ?? query;
+        trackAuthor = response.data['author'] ?? 'نامیرا موزیک';
+        trackDuration = response.data['duration'] ?? '00:30';
       }
 
       if (audioUrl.isEmpty) {
@@ -153,10 +157,10 @@ class _MusicScreenState extends State<MusicScreen> {
       }
 
       MusicMessageModel musicModel = MusicMessageModel(
-        title: title,
-        author: 'نامیرا موزیک',
+        title: trackTitle,
+        author: trackAuthor,
         audioUrl: audioUrl,
-        duration: '03:30',
+        duration: trackDuration,
         isDownloaded: false,
       );
 
@@ -170,12 +174,20 @@ class _MusicScreenState extends State<MusicScreen> {
       });
       _saveHistory();
 
-    } catch (e) {
+    } on DioException catch (e) {
+      String errorMessage = 'خطا در ارتباط با سرور موزیک';
+      if (e.response?.statusCode == 404) {
+        errorMessage = 'موزیک مورد نظر یافت نشد.';
+      } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+        errorMessage = 'سرور در حال بیدار شدن است، لطفاً دوباره تلاش کنید.';
+      }
       setState(() {
-        _chatItems.add({
-          "type": "system",
-          "text": 'خطا در ارتباط با سرور موزیک (سرور در حال بیدار شدن است، دوباره تلاش کنید)',
-        });
+        _chatItems.add({"type": "system", "text": errorMessage});
+      });
+      _saveHistory();
+    } catch (_) {
+      setState(() {
+        _chatItems.add({"type": "system", "text": 'خطای غیرمنتظره‌ای رخ داد.'});
       });
       _saveHistory();
     } finally {
@@ -187,19 +199,10 @@ class _MusicScreenState extends State<MusicScreen> {
 
   Future<void> _startManualDownload(MusicMessageModel music, int itemIndex) async {
     try {
-      var status = await Permission.storage.request();
-      if (!status.isGranted && Platform.isAndroid) {
-        await Permission.manageExternalStorage.request();
-      }
-
-      Directory? directory;
+      // استفاده از پوشه امن داخلی اپلیکیشن بدون نیاز به مجوزهای خطرناک استوریج
+      Directory? directory = await getApplicationDocumentsDirectory();
       if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        if (!directory.existsSync()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else {
-        directory = await getApplicationDocumentsDirectory();
+        directory = await getExternalStorageDirectory() ?? directory;
       }
 
       setState(() {
@@ -213,8 +216,6 @@ class _MusicScreenState extends State<MusicScreen> {
       String ext = "mp3";
       if (music.audioUrl.contains(".m4a")) ext = "m4a";
       else if (music.audioUrl.contains(".wav")) ext = "wav";
-      else if (music.audioUrl.contains(".ogg")) ext = "ogg";
-      else if (music.audioUrl.contains(".aac")) ext = "aac";
 
       String filePath = "${directory!.path}/${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.$ext";
 
@@ -278,7 +279,7 @@ class _MusicScreenState extends State<MusicScreen> {
           }
           _currentlyPlayingUrl = music.audioUrl;
           music.isPlaying = true;
-          });
+        });
       }
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -287,7 +288,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     List<String> searchHistory = _chatItems
         .where((item) => item["type"] == "user")
