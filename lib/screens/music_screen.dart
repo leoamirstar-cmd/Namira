@@ -24,6 +24,9 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
 
+  // آدرس سرور واقعی شما روی PythonAnywhere
+  final String _apiUrl = "https://amirhr1381.pythonanywhere.com/get_music";
+
   @override
   void dispose() {
     _audioPlayer.dispose();
@@ -53,55 +56,50 @@ class _MusicScreenState extends State<MusicScreen> {
         return;
       }
 
-      await Future.delayed(const Duration(seconds: 1));
-
-      // استخراج دقیق بخش پایانی لینک برای ساخت نامتاثر از لینک کاربر
-      Uri? uri = Uri.tryParse(musicUrl);
-      String pathSegment = (uri != null && uri.pathSegments.isNotEmpty) 
-          ? uri.pathSegments.last 
-          : DateTime.now().millisecondsSinceEpoch.toString();
-          
-      bool isSpotify = musicUrl.contains('spotify');
-      String title = isSpotify ? "موزیک اسپاتیفای ($pathSegment)" : "تراک ساوندکلاد ($pathSegment)";
-      String author = isSpotify ? "Spotify Verified Artist" : "SoundCloud Creator";
-      
-      // لیست کامل‌تر و مجزای لینک‌های تست برای اینکه هر لینک دقیقا یک فایل متفاوت بگیرد
-      List<String> dynamicAudioUrls = [
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
-        "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
-      ];
-      
-      int uniqueIndex = musicUrl.codeUnits.fold(0, (prev, element) => prev + element) % dynamicAudioUrls.length;
-      String audioDownloadUrl = dynamicAudioUrls[uniqueIndex];
-
-      MusicMessageModel musicModel = MusicMessageModel(
-        title: title,
-        author: author,
-        audioUrl: audioDownloadUrl,
-        duration: "03:32",
+      // ارسال درخواست POST به سرور پایتون
+      Dio dio = Dio();
+      var response = await dio.post(
+        _apiUrl,
+        data: {"url": musicUrl},
+        options: Options(headers: {"Content-Type": "application/json"}),
       );
 
-      setState(() {
-        _chatItems.add({
-          "type": "music",
-          "music": musicModel,
-          "downloadProgress": 0.0,
-          "isDownloading": true,
-        });
-      });
+      if (response.statusCode == 200 && response.data != null) {
+        var data = response.data;
+        
+        // تبدیل زمان از ثانیه به دقیقه:ثانیه
+        int durationSec = int.tryParse(data['duration'].toString()) ?? 0;
+        String minutes = (durationSec ~/ 60).toString().padLeft(2, '0');
+        String seconds = (durationSec % 60).toString().padLeft(2, '0');
+        String formattedDuration = "$minutes:$seconds";
 
-      int index = _chatItems.length - 1;
-      await _downloadWithProgress(musicModel, index);
+        MusicMessageModel musicModel = MusicMessageModel(
+          title: data['title'] ?? 'بدون عنوان',
+          author: data['author'] ?? 'ناشناس',
+          audioUrl: data['audio_url'] ?? '',
+          duration: formattedDuration,
+        );
+
+        setState(() {
+          _chatItems.add({
+            "type": "music",
+            "music": musicModel,
+            "downloadProgress": 0.0,
+            "isDownloading": true,
+          });
+        });
+
+        int index = _chatItems.length - 1;
+        await _downloadWithProgress(musicModel, index);
+      } else {
+        throw Exception("خطا در پاسخ سرور");
+      }
 
     } catch (e) {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در دریافت فایل. لطفاً دوباره تلاش کنید.',
+          "text": 'خطا در استخراج اطلاعات موزیک از سرور. لطفاً مجدداً تلاش کنید.',
         });
       });
     } finally {
