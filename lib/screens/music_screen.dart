@@ -26,7 +26,6 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
   
-  // آدرس سرور شما روی رندر
   final String _serverBaseUrl = 'https://music-extractor.onrender.com';
 
   @override
@@ -126,7 +125,6 @@ class _MusicScreenState extends State<MusicScreen> {
 
     try {
       Dio dio = Dio();
-      // تایم‌اوت ۲ دقیقه‌ای برای بیدار شدن سرور رایگان رندر
       var response = await dio.get(
         '$_serverBaseUrl/search',
         queryParameters: {'q': query},
@@ -136,7 +134,7 @@ class _MusicScreenState extends State<MusicScreen> {
         ),
       );
 
-            String audioUrl = '';
+      String audioUrl = '';
       String title = query;
       
       if (response.statusCode == 200 && response.data != null) {
@@ -150,6 +148,7 @@ class _MusicScreenState extends State<MusicScreen> {
             "text": 'موزیک مورد نظر پیدا نشد!',
           });
         });
+        _saveHistory();
         return;
       }
 
@@ -162,15 +161,6 @@ class _MusicScreenState extends State<MusicScreen> {
       );
 
       setState(() {
-        _chatItems.add({
-          "type": "music",
-          "music": musicModel,
-          "downloadProgress": 0.0,
-          "isDownloading": false,
-        });
-      });
-      _saveHistory();
-
         _chatItems.add({
           "type": "music",
           "music": musicModel,
@@ -288,7 +278,7 @@ class _MusicScreenState extends State<MusicScreen> {
           }
           _currentlyPlayingUrl = music.audioUrl;
           music.isPlaying = true;
-        });
+          });
       }
     } catch (_) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -299,7 +289,6 @@ class _MusicScreenState extends State<MusicScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // استخراج لیست جستجوهای قبلی کاربر برای نمایش در منوی کشویی بالای صفحه
     List<String> searchHistory = _chatItems
         .where((item) => item["type"] == "user")
         .map((item) => item["text"].toString().replaceFirst('دانلود موزیک ', ''))
@@ -317,7 +306,7 @@ class _MusicScreenState extends State<MusicScreen> {
                 colors: [Color(0xFF1DB954), Color(0xFF191414)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                ),
+              ),
             ),
           ),
           title: Row(
@@ -326,7 +315,6 @@ class _MusicScreenState extends State<MusicScreen> {
               const SizedBox(width: 10),
               const Text('کلاب دانلود موزیک', style: TextStyle(color: Colors.white, fontSize: 15)),
               const Spacer(),
-              // منوی کشویی تاریخچه جستجوها در بالای صفحه
               if (searchHistory.isNotEmpty)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.history_rounded, color: Colors.white),
