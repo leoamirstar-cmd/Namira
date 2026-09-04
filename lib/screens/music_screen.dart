@@ -25,6 +25,9 @@ class _MusicScreenState extends State<MusicScreen> {
   
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
+  
+  // آدرس سرور شما روی رندر
+  final String _serverBaseUrl = 'https://music-extractor.onrender.com';
 
   @override
   void initState() {
@@ -40,60 +43,62 @@ class _MusicScreenState extends State<MusicScreen> {
     super.dispose();
   }
 
-  // بارگذاری تاریخچه ذخیره شده از حافظه محلی
   Future<void> _loadHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? historyString = prefs.getString('music_chat_history');
-    if (historyString != null) {
-      List<dynamic> decoded = jsonDecode(historyString);
-      setState(() {
-        _chatItems.clear();
-        for (var item in decoded) {
-          if (item['type'] == 'user') {
-            _chatItems.add({"type": "user", "text": item['text']});
-          } else if (item['type'] == 'system') {
-            _chatItems.add({"type": "system", "text": item['text']});
-          } else if (item['type'] == 'music') {
-            _chatItems.add({
-              "type": "music",
-              "music": MusicMessageModel(
-                title: item['title'],
-                author: item['author'],
-                audioUrl: item['audioUrl'],
-                duration: item['duration'],
-                isDownloaded: item['isDownloaded'] ?? false,
-              ),
-              "downloadProgress": 0.0,
-              "isDownloading": false,
-            });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? historyString = prefs.getString('music_chat_history_v3');
+      if (historyString != null) {
+        List<dynamic> decoded = jsonDecode(historyString);
+        setState(() {
+          _chatItems.clear();
+          for (var item in decoded) {
+            if (item['type'] == 'user') {
+              _chatItems.add({"type": "user", "text": item['text']});
+            } else if (item['type'] == 'system') {
+              _chatItems.add({"type": "system", "text": item['text']});
+            } else if (item['type'] == 'music') {
+              _chatItems.add({
+                "type": "music",
+                "music": MusicMessageModel(
+                  title: item['title'] ?? 'موزیک',
+                  author: item['author'] ?? 'نامیرا موزیک',
+                  audioUrl: item['audioUrl'] ?? '',
+                  duration: item['duration'] ?? '03:30',
+                  isDownloaded: item['isDownloaded'] ?? false,
+                ),
+                "downloadProgress": 0.0,
+                "isDownloading": false,
+              });
+            }
           }
-        }
-      });
-    }
-  }
-
-  // ذخیره تاریخچه در حافظه محلی
-  Future<void> _saveHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<Map<String, dynamic>> listToSave = [];
-    for (var item in _chatItems) {
-      if (item['type'] == 'user') {
-        listToSave.add({"type": "user", "text": item['text']});
-      } else if (item['type'] == 'system') {
-        listToSave.add({"type": "system", "text": item['text']});
-      } else if (item['type'] == 'music') {
-        MusicMessageModel m = item['music'];
-        listToSave.add({
-          "type": "music",
-          "title": m.title,
-          "author": m.author,
-          "audioUrl": m.audioUrl,
-          "duration": m.duration,
-          "isDownloaded": m.isDownloaded,
         });
       }
-    }
-    await prefs.setString('music_chat_history', jsonEncode(listToSave));
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<Map<String, dynamic>> listToSave = [];
+      for (var item in _chatItems) {
+        if (item['type'] == 'user') {
+          listToSave.add({"type": "user", "text": item['text']});
+        } else if (item['type'] == 'system') {
+          listToSave.add({"type": "system", "text": item['text']});
+        } else if (item['type'] == 'music') {
+          MusicMessageModel m = item['music'];
+          listToSave.add({
+            "type": "music",
+            "title": m.title,
+            "author": m.author,
+            "audioUrl": m.audioUrl,
+            "duration": m.duration,
+            "isDownloaded": m.isDownloaded,
+          });
+        }
+      }
+      await prefs.setString('music_chat_history_v3', jsonEncode(listToSave));
+    } catch (_) {}
   }
 
   void _onTextChanged() {
@@ -121,40 +126,28 @@ class _MusicScreenState extends State<MusicScreen> {
 
     try {
       Dio dio = Dio();
-      String? finalAudioUrl;
-      String songTitle = query;
-      String songAuthor = 'نامیرا موزیک';
+      // درخواست به سرور پایتون روی رندر برای دریافت لینک تمام فرمت‌های صوتی
+      var response = await dio.get(
+        '$_serverBaseUrl/search',
+        queryParameters: {'q': query},
+        options: Options(receiveTimeout: const Duration(seconds: 15)),
+      );
 
-      // جستجو در وب برای یافتن هرگونه فرمت صوتی (mp3, m4a, ogg, wav و غیره)
-      try {
-        var searchResponse = await dio.get(
-          'https://html.duckduckgo.com/html/',
-          queryParameters: {'q': '$query file download audio music'},
-          options: Options(
-            sendTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 10),
-            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
-          ),
-        );
+      String audioUrl = '';
+      String title = query;
+      
+      if (response.statusCode == 200 && response.data != null) {
+        audioUrl = response.data['url'] ?? '';
+      }
 
-        String html = searchResponse.data.toString();
-        // جستجو برای انواع فرمت‌های رایج صوتی
-        RegExp exp = RegExp(r'href="(https?://[^"]+\.(mp3|m4a|ogg|wav|aac)[^"]*)"', caseSensitive: false);
-        var match = exp.firstMatch(html);
-
-        if (match != null) {
-          finalAudioUrl = match.group(1);
-        } else {
-          finalAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-        }
-      } catch (_) {
-        finalAudioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+      if (audioUrl.isEmpty) {
+        audioUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
       }
 
       MusicMessageModel musicModel = MusicMessageModel(
-        title: songTitle,
-        author: songAuthor,
-        audioUrl: finalAudioUrl!,
+        title: title,
+        author: 'نامیرا موزیک',
+        audioUrl: audioUrl,
         duration: '03:30',
         isDownloaded: false,
       );
@@ -173,7 +166,7 @@ class _MusicScreenState extends State<MusicScreen> {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در جستجوی موزیک: $e',
+          "text": 'خطا در ارتباط با سرور موزیک',
         });
       });
       _saveHistory();
@@ -184,10 +177,13 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // دانلود دستی توسط کاربر پس از کلیک روی دکمه دانلود
   Future<void> _startManualDownload(MusicMessageModel music, int itemIndex) async {
     try {
-      await Permission.storage.request();
+      var status = await Permission.storage.request();
+      if (!status.isGranted && Platform.isAndroid) {
+        await Permission.manageExternalStorage.request();
+      }
+
       Directory? directory;
       if (Platform.isAndroid) {
         directory = Directory('/storage/emulated/0/Download');
@@ -204,13 +200,13 @@ class _MusicScreenState extends State<MusicScreen> {
       });
 
       String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-      if (safeTitle.length > 25) safeTitle = safeTitle.substring(0, 25);
+      if (safeTitle.length > 20) safeTitle = safeTitle.substring(0, 20);
       
-      // تشخیص پسوند فایل از روی لینک یا پیش‌فرض mp3
       String ext = "mp3";
       if (music.audioUrl.contains(".m4a")) ext = "m4a";
       else if (music.audioUrl.contains(".wav")) ext = "wav";
       else if (music.audioUrl.contains(".ogg")) ext = "ogg";
+      else if (music.audioUrl.contains(".aac")) ext = "aac";
 
       String filePath = "${directory!.path}/${safeTitle}_${DateTime.now().millisecondsSinceEpoch}.$ext";
 
@@ -239,7 +235,7 @@ class _MusicScreenState extends State<MusicScreen> {
         });
         _saveHistory();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('موزیک با موفقیت دانلود شد')),
+          const SnackBar(content: Text('موزیک با موفقیت ذخیره شد')),
         );
       }
     } catch (e) {
@@ -337,7 +333,7 @@ class _MusicScreenState extends State<MusicScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'نام آهنگ یا خواننده رو بنویس تا برات پیداش کنم!',
+                              'تاریخچه خالی است. نام موزیک را جستجو کنید!',
                               style: TextStyle(fontSize: 14, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
                               textAlign: TextAlign.center,
                             ),
@@ -345,7 +341,7 @@ class _MusicScreenState extends State<MusicScreen> {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                         itemCount: _chatItems.length,
                         itemBuilder: (context, index) {
                           var item = _chatItems[index];
@@ -394,79 +390,78 @@ class _MusicScreenState extends State<MusicScreen> {
                                   border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
                                 ),
                                 child: Column(
-                                    children: [
-                                      Row(
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () => _togglePlayPause(music),
-                                            child: Container(
-                                              width: 50,
-                                              height: 50,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: Colors.green,
-                                                boxShadow: [
-                                                  BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
-                                                ],
-                                              ),
-                                              child: Icon(
-                                                music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                                color: Colors.white,
-                                                size: 28,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  music.title,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
-                                                ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  music.author,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
+                                  children: [
+                                    Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () => _togglePlayPause(music),
+                                          child: Container(
+                                            width: 50,
+                                            height: 50,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.green,
+                                              boxShadow: [
+                                                BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
                                               ],
                                             ),
+                                            child: Icon(
+                                              music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
                                           ),
-                                          // دکمه دستی دانلود یا تیک ذخیره شده
-                                          isDownloading
-                                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                                              : IconButton(
-                                                  icon: Icon(
-                                                    music.isDownloaded ? Icons.check_circle_rounded : Icons.download_rounded,
-                                                    color: music.isDownloaded ? Colors.green : Colors.orange,
-                                                    size: 28,
-                                                  ),
-                                                  onPressed: music.isDownloaded ? null : () => _startManualDownload(music, index),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                music.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                music.author,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
+                                            ],
+                                          ),
+                                        ),
+                                        isDownloading
+                                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                                            : IconButton(
+                                                icon: Icon(
+                                                  music.isDownloaded ? Icons.check_circle_rounded : Icons.download_rounded,
+                                                  color: music.isDownloaded ? Colors.green : Colors.orange,
+                                                  size: 28,
                                                 ),
-                                        ],
+                                                onPressed: music.isDownloaded ? null : () => _startManualDownload(music, index),
+                                              ),
+                                      ],
+                                    ),
+                                    if (isDownloading) ...[
+                                      const SizedBox(height: 12),
+                                      LinearProgressIndicator(
+                                        value: progress,
+                                        color: Colors.green,
+                                        backgroundColor: Colors.green.withOpacity(0.2),
                                       ),
-                                      if (isDownloading) ...[
-                                        const SizedBox(height: 12),
-                                        LinearProgressIndicator(
-                                          value: progress,
-                                          color: Colors.green,
-                                          backgroundColor: Colors.green.withOpacity(0.2),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'در حال دانلود: ${(progress * 100).toStringAsFixed(0)}%',
-                                          style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white54 : Colors.black54),
-                                        ),
-                                      ]
-                                    ],
-                                  ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'در حال ذخیره: ${(progress * 100).toStringAsFixed(0)}%',
+                                        style: TextStyle(fontSize: 10, color: widget.isDarkMode ? Colors.white54 : Colors.black54),
+                                      ),
+                                    ]
+                                  ],
+                                ),
                               ),
                             );
                           }
