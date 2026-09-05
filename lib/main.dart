@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/main_selection_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const NamiraApp());
 }
@@ -16,17 +19,55 @@ class NamiraApp extends StatefulWidget {
 class _NamiraAppState extends State<NamiraApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   String _language = 'fa';
-  
-  void _toggleTheme(bool isDark) {
+  String? _customBackgroundImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  // بارگذاری تنظیمات ذخیره شده از حافظه داخلی
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _language = prefs.getString('app_language') ?? 'fa';
+      final isDark = prefs.getBool('is_dark_mode') ?? true;
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      _customBackgroundImage = prefs.getString('custom_bg_image');
+    });
+  }
+
+  // تغییر و ذخیره تم
+  Future<void> _toggleTheme(bool isDark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_dark_mode', isDark);
     setState(() {
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
     });
   }
 
-  void _changeLanguage(String lang) {
+  // تغییر و ذخیره زبان
+  Future<void> _changeLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_language', lang);
     setState(() {
       _language = lang;
     });
+  }
+
+  // انتخاب عکس از گالری به عنوان پس‌زمینه و ذخیره آن
+  Future<void> _pickBackgroundImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (image != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('custom_bg_image', image.path);
+      setState(() {
+        _customBackgroundImage = image.path;
+      });
+    }
   }
 
   @override
@@ -50,8 +91,10 @@ class _NamiraAppState extends State<NamiraApp> {
       home: MainSelectionScreen(
         onToggleTheme: _toggleTheme,
         onChangeLanguage: _changeLanguage,
+        onPickBackground: _pickBackgroundImage,
         currentLanguage: _language,
         isDarkMode: _themeMode == ThemeMode.dark,
+        customBackgroundImage: _customBackgroundImage,
       ),
     );
   }
