@@ -59,7 +59,7 @@ class _MusicScreenState extends State<MusicScreen> {
                   title: item['title'] ?? 'موزیک',
                   author: item['author'] ?? 'نامیرا موزیک',
                   audioUrl: item['audioUrl'] ?? '',
-                  duration: item['duration'] ?? '00:30',
+                  duration: item['duration'] ?? '03:45',
                   isDownloaded: false,
                 ),
               });
@@ -131,13 +131,13 @@ class _MusicScreenState extends State<MusicScreen> {
       String audioUrl = '';
       String trackTitle = query;
       String trackAuthor = 'نامیرا موزیک';
-      String trackDuration = '00:30';
+      String trackDuration = '03:45';
       
       if (response.statusCode == 200 && response.data != null) {
         audioUrl = response.data['url'] ?? '';
         trackTitle = response.data['title'] ?? query;
         trackAuthor = response.data['author'] ?? 'نامیرا موزیک';
-        trackDuration = response.data['duration'] ?? '00:30';
+        trackDuration = response.data['duration'] ?? '03:45';
       }
 
       if (audioUrl.isEmpty) {
