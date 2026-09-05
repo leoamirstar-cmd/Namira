@@ -1,68 +1,108 @@
 import 'package:dio/dio.dart';
-import 'proxy_helper.dart'; // فایل پروکسی رو اینجا صدا زدیم[span_1](start_span)[span_1](end_span)
+import 'proxy_helper.dart';
 
 class GeminiManager {
   final Dio _dio = Dio();
   
-  final String apiKey = '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';
+  // آدرس کلودفلر ورکر اختصاصی شما
+  final String workerUrl = 'https://gentle-bonus-c031.leoamirstar.workers.dev/';
+
+  // ذخیره سابقه چت
+  final List<Map<String, dynamic>> _chatHistory = [];
+
+  void clearHistory() {
+    _chatHistory.clear();
+  }
 
   Future<String> sendPromptRacing({
     required String prompt,
+    String? base64Media,
+    String? mimeType,
     required CancelToken cancelToken,
   }) async {
-    if (apiKey.isEmpty) {
-      return "❌ کلید API تنظیم نشده!";
-    }
-    
-    // صدا زدن فایل جداگانه برای پروکسی قبل از ارسال درخواست
     await ProxyHelper.setupProxy(_dio);
+
+    dynamic userContent;
+    if (base64Media != null && base64Media.isNotEmpty) {
+      userContent = [
+        {"type": "text", "text": prompt},
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:${mimeType ?? 'image/jpeg'};base64,$base64Media"
+          }
+        }
+      ];
+    } else {
+      userContent = prompt;
+    }
+
+    _chatHistory.add({
+      "role": "user",
+      "content": userContent,
+    });
+
+    List<Map<String, dynamic>> messagesToSend = _chatHistory;
+    if (_chatHistory.length > 20) {
+      messagesToSend = _chatHistory.sublist(_chatHistory.length - 20);
+    }
 
     try {
       final response = await _dio.post(
-        'https://lingering-sea-ef49.leoamirstar.workers.dev',
+        workerUrl,
         options: Options(
           headers: {
-            'Authorization': 'Bearer $apiKey',
             'Content-Type': 'application/json',
           },
-          validateStatus: (status) => status! < 500,
+          validateStatus: (status) => true, // اجازه می‌دهد تمام ارورها را خودمان مدیریت کنیم
         ),
         data: {
-          "model": "openai/gpt-oss-120b",
-          "messages": [
-            {
-              "role": "user",
-              "content": prompt
-            }
-          ]
+          "model": "gpt-3.6", // تنظیم روی نسخه 3.6
+          "messages": messagesToSend,
         },
         cancelToken: cancelToken,
       );
 
+      // بررسی وضعیت پاسخ
       if (response.statusCode == 200) {
         final data = response.data;
-        if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
+        if (data is Map && data['choices'] != null && (data['choices'] as List).isNotEmpty) {
           final firstChoice = data['choices'][0];
-          if (firstChoice != null && 
-              firstChoice['message'] != null && 
-              firstChoice['message']['content'] != null) {
-            return firstChoice['message']['content'].toString();
+          if (firstChoice['message'] != null && firstChoice['message']['content'] != null) {
+            final replyText = firstChoice['message']['content'].toString();
+            _chatHistory.add({
+              "role": "assistant",
+              "content": replyText,
+            });
+            return replyText;
           }
         }
-        return "پاسخی دریافت نشد.";
+        // اگر ساختار پاسخ متفاوت بود، متن خام را برگردان تا ببینیم
+        return "⚠️ پاسخ نامعتبر از سرور: ${response.data}";
       } else {
-        return "خطای سرور (${response.statusCode}): ${response.data}";
+        // حذف آخرین پیام از حافظه به خاطر بروز خطا
+        _chatHistory.removeLast();
+        // بازگرداندن متن دقیق ارور سرور
+        return "❌ خطای سرور (${response.statusCode}):\n${response.data}";
       }
     } on DioException catch (e) {
-      return "خطای اتصال: ${e.message}";
+      if (_chatHistory.isNotEmpty) _chatHistory.removeLast();
+      return "❌ خطای شبکه/دیو: ${e.message} \n جزئیات: ${e.response?.data}";
     } catch (e) {
-      return "خطای ناشناخته: $e";
+      if (_chatHistory.isNotEmpty) _chatHistory.removeLast();
+      return "❌ خطای ناشناخته: $e";
     }
   }
 
-  Future<String> sendMessage(String prompt) async {
+  Future<String> sendMessage(
+    String prompt, {
+    String? base64Media,
+    String? mimeType,
+  }) async {
     return await sendPromptRacing(
-      prompt: prompt, 
+      prompt: prompt,
+      base64Media: base64Media,
+      mimeType: mimeType,
       cancelToken: CancelToken(),
     );
   }
