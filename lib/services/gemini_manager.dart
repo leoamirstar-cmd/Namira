@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'proxy_helper.dart';
 
@@ -42,9 +43,9 @@ class GeminiManager {
       "content": userContent,
     });
 
-    List<Map<String, dynamic>> messagesToSend = _chatHistory;
-    if (_chatHistory.length > 20) {
-      messagesToSend = _chatHistory.sublist(_chatHistory.length - 20);
+    List<Map<String, dynamic>> messagesToSend = List.from(_chatHistory);
+    if (messagesToSend.length > 20) {
+      messagesToSend = messagesToSend.sublist(messagesToSend.length - 20);
     }
 
     try {
@@ -54,20 +55,28 @@ class GeminiManager {
           headers: {
             'Content-Type': 'application/json',
           },
-          validateStatus: (status) => true, // اجازه می‌دهد تمام ارورها را خودمان مدیریت کنیم
+          validateStatus: (status) => true,
         ),
         data: {
-          "model": "gpt-3.6", // تنظیم روی نسخه 3.6
+          "model": "gpt-3.6",
           "messages": messagesToSend,
         },
         cancelToken: cancelToken,
       );
 
-      // بررسی وضعیت پاسخ
+      // تبدیل امن پاسخ به Map اگر به صورت String خام برگشته باشد
+      dynamic rawData = response.data;
+      if (rawData is String) {
+        try {
+          rawData = jsonDecode(rawData);
+        } catch (_) {
+          // اگر متن ساده بود همان استرینگ می‌ماند
+        }
+      }
+
       if (response.statusCode == 200) {
-        final data = response.data;
-        if (data is Map && data['choices'] != null && (data['choices'] as List).isNotEmpty) {
-          final firstChoice = data['choices'][0];
+        if (rawData is Map && rawData['choices'] != null && (rawData['choices'] as List).isNotEmpty) {
+          final firstChoice = rawData['choices'][0];
           if (firstChoice['message'] != null && firstChoice['message']['content'] != null) {
             final replyText = firstChoice['message']['content'].toString();
             _chatHistory.add({
@@ -77,13 +86,10 @@ class GeminiManager {
             return replyText;
           }
         }
-        // اگر ساختار پاسخ متفاوت بود، متن خام را برگردان تا ببینیم
-        return "⚠️ پاسخ نامعتبر از سرور: ${response.data}";
+        return "⚠️ پاسخ نامعتبر از سرور: $rawData";
       } else {
-        // حذف آخرین پیام از حافظه به خاطر بروز خطا
-        _chatHistory.removeLast();
-        // بازگرداندن متن دقیق ارور سرور
-        return "❌ خطای سرور (${response.statusCode}):\n${response.data}";
+        if (_chatHistory.isNotEmpty) _chatHistory.removeLast();
+        return "❌ خطای سرور (${response.statusCode}):\n$rawData";
       }
     } on DioException catch (e) {
       if (_chatHistory.isNotEmpty) _chatHistory.removeLast();
