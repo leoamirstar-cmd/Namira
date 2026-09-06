@@ -180,17 +180,20 @@ class _MusicScreenState extends State<MusicScreen> {
 
   // متد کمکی برای گرفتن لینک کاملاً زنده در همان ثانیه کلیک
   Future<String?> _getFreshStreamUrl(String videoId) async {
-    final yt = YoutubeExplode();
-    try {
-      var manifest = await yt.videos.streamsClient.getManifest(videoId);
-      var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
-      return audioStreamInfo.url.toString();
-    } catch (e) {
-      return null;
-    } finally {
-      yt.close();
-    }
+  final yt = YoutubeExplode();
+  try {
+    var manifest = await yt.videos.streamsClient.getManifest(videoId);
+    // استفاده از first به جای withHighestBitrate برای پایداری بیشتر
+    var audioStreamInfo = manifest.audioOnly.first; 
+    return audioStreamInfo.url.toString();
+  } catch (e) {
+    // چاپ خطای دقیق در کنسول (برای اینکه ببینیم مشکل چیست)
+    debugPrint('🔴 خطای دقیق یوتیوب: $e');
+    return null;
+  } finally {
+    yt.close();
   }
+}
 
   // ۲. متد پخش موزیک همراه با گرفتن لینک زنده (بدون ارور انقضا)
   Future<void> _togglePlayPause(MusicMessageModel music) async {
