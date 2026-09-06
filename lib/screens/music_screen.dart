@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../models/chat_models.dart';
 
 class MusicScreen extends StatefulWidget {
@@ -24,12 +26,33 @@ class _MusicScreenState extends State<MusicScreen> {
   String? _currentlyPlayingUrl;
   
   final String _serverBaseUrl = 'https://namira-music-api.leoamirstar.workers.dev';
+  String? _musicBackgroundImage;
 
   @override
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: 'پخش موزیک ');
+    _loadMusicPreferences();
     _loadHistory();
+  }
+
+  Future<void> _loadMusicPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _musicBackgroundImage = prefs.getString('music_bg_image');
+    });
+  }
+
+  Future<void> _pickMusicBackground() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('music_bg_image', image.path);
+      setState(() {
+        _musicBackgroundImage = image.path;
+      });
+    }
   }
 
   @override
@@ -245,6 +268,11 @@ class _MusicScreenState extends State<MusicScreen> {
               const SizedBox(width: 10),
               const Text('رادیو و استریم موزیک', style: TextStyle(color: Colors.white, fontSize: 15)),
               const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.wallpaper_rounded, color: Colors.white),
+                tooltip: 'انتخاب عکس پس‌زمینه',
+                onPressed: _pickMusicBackground,
+              ),
               if (searchHistory.isNotEmpty)
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.history_rounded, color: Colors.white),
@@ -283,6 +311,16 @@ class _MusicScreenState extends State<MusicScreen> {
         body: Container(
           decoration: BoxDecoration(
             color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFFF8F9FA),
+            image: _musicBackgroundImage != null && _musicBackgroundImage!.isNotEmpty
+                ? DecorationImage(
+                    image: FileImage(File(_musicBackgroundImage!)),
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                      Colors.black.withOpacity(widget.isDarkMode ? 0.65 : 0.2),
+                      BlendMode.darken,
+                    ),
+                  )
+                : null,
           ),
           child: Column(
             children: [
@@ -318,98 +356,105 @@ class _MusicScreenState extends State<MusicScreen> {
                         itemCount: _chatItems.length,
                         itemBuilder: (context, index) {
                           var item = _chatItems[index];
-                          if (item["type"] == "user") {
-                            return Align(
-                              alignment: Alignment.centerRight,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 6),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade700,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 13), textDirection: TextDirection.ltr),
-                              ),
-                            );
-                          } else if (item["type"] == "system") {
-                            return Center(
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(item["text"], style: TextStyle(color: widget.isDarkMode ? Colors.white60 : Colors.black54, fontSize: 13), textAlign: TextAlign.center),
-                              ),
-                            );
-                          } else {
-                            MusicMessageModel music = item["music"];
-
-                            return Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                width: MediaQuery.of(context).size.width * 0.85,
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: widget.isDarkMode ? const Color(0xFF182533) : Colors.white,
-                                  borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3)),
-                                  ],
-                                  border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
-                                ),
-                                child: Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => _togglePlayPause(music),
-                                      child: Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.green,
-                                          boxShadow: [
-                                            BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
-                                          ],
+                          
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween<double>(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 250),
+                            builder: (context, value, child) {
+                              return Transform.translate(
+                                offset: Offset(0, 15 * (1 - value)),
+                                child: Opacity(opacity: value, child: child),
+                              );
+                            },
+                            child: item["type"] == "user"
+                                ? Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(vertical: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade700,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 13), textDirection: TextDirection.ltr),
+                                    ),
+                                  )
+                                : item["type"] == "system"
+                                    ? Center(
+                                        child: Container(
+                                          margin: const EdgeInsets.symmetric(vertical: 8),
+                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(item["text"], style: TextStyle(color: widget.isDarkMode ? Colors.white60 : Colors.black54, fontSize: 13), textAlign: TextAlign.center),
                                         ),
-                                        child: Icon(
-                                          music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                          color: Colors.white,
-                                          size: 28,
+                                      )
+                                    : Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Container(
+                                          width: MediaQuery.of(context).size.width * 0.85,
+                                          margin: const EdgeInsets.symmetric(vertical: 8),
+                                          padding: const EdgeInsets.all(14),
+                                          decoration: BoxDecoration(
+                                            color: widget.isDarkMode ? const Color(0xFF182533) : Colors.white,
+                                            borderRadius: BorderRadius.circular(18),
+                                            boxShadow: [
+                                              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3)),
+                                            ],
+                                            border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              GestureDetector(
+                                                onTap: () => _togglePlayPause(item["music"]),
+                                                child: Container(
+                                                  width: 50,
+                                                  height: 50,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: Colors.green,
+                                                    boxShadow: [
+                                                      BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
+                                                    ],
+                                                  ),
+                                                  child: Icon(
+                                                    (item["music"] as MusicMessageModel).isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                    color: Colors.white,
+                                                    size: 28,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 14),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      (item["music"] as MusicMessageModel).title,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
+                                                    ),
+                                                    const SizedBox(height: 3),
+                                                    Text(
+                                                      (item["music"] as MusicMessageModel).author,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Text((item["music"] as MusicMessageModel).duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(Icons.stream_rounded, color: Colors.green, size: 24),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            music.title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            music.author,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(Icons.stream_rounded, color: Colors.green, size: 24),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
+                          );
                         },
                       ),
               ),
