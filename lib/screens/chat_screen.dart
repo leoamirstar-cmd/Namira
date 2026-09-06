@@ -267,7 +267,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     setState(() {
       _messages.add({
-        'sender': 'user',
+                'sender': 'user',
         'text': text,
         'type': imagePath != null ? 'image' : 'text',
         'path': imagePath,
@@ -491,6 +491,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       body: Container(
         decoration: BoxDecoration(
+          image: const DecorationImage(
+            image: AssetImage("assets/images/chat_bg.png"),
+            fit: BoxFit.cover,
+            opacity: 0.35, // تنظیم میزان شفافیت تصویر پس‌زمینه
+          ),
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
