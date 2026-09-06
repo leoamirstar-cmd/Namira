@@ -29,7 +29,7 @@ class _MusicScreenState extends State<MusicScreen> {
   final Map<String, double> _downloadProgress = {};
 
   final Map<String, String> _headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   };
 
   @override
@@ -111,7 +111,6 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // جستجوی هوشمند به سبک YouTube Music با چسباندن کلیدواژه رسمی
   Future<void> _processMusicSearch(String fullInput) async {
     const prefix = 'پخش موزیک ';
     String query = fullInput.replaceFirst(prefix, '').trim();
@@ -128,12 +127,10 @@ class _MusicScreenState extends State<MusicScreen> {
     final yt = YoutubeExplode();
 
     try {
-      // بهینه‌سازی کوئری برای پیدا کردن بهترین نتیجه صوتی (YouTube Music style)
       String optimizedQuery = "$query official audio topic";
       var searchList = await yt.search.getVideos(optimizedQuery);
       
       if (searchList.isEmpty) {
-        // اگر با کوئری تخصصی پیدا نشد، جستجوی ساده‌ی معمولی انجام بده
         searchList = await yt.search.getVideos(query);
       }
 
@@ -183,32 +180,22 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // متد استخراج لینک با مکانیزم چندلایه برای جلوگیری از خطای پلیر
+  // گرفتن لینک توسط گوشی و ارسال آن به کلودفلر ورکر برای پروکسی ایمن
   Future<String?> _getFreshStreamUrl(String videoId) async {
     final yt = YoutubeExplode();
     try {
       var manifest = await yt.videos.streamsClient.getManifest(videoId);
-      
-      // اولویت اول: استریم صوتی با بالاترین کیفیت
       var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
-      return audioStreamInfo.url.toString();
+      String rawStreamUrl = audioStreamInfo.url.toString();
+
+      // انکود کردن لینک و فرستادن به ورکر کلودفلر شما
+      String encodedUrl = Uri.encodeComponent(rawStreamUrl);
+      String proxyUrl = 'https://patient-sea-a6af.leoamirstar.workers.dev/?url=$encodedUrl';
+
+      return proxyUrl;
     } catch (e) {
-      try {
-        // اولویت دوم: اولین استریم صوتی موجود
-        var manifest = await yt.videos.streamsClient.getManifest(videoId);
-        var fallbackStream = manifest.audioOnly.first;
-        return fallbackStream.url.toString();
-      } catch (innerError) {
-        try {
-          // اولویت سوم: استریم ترکیبی (Muxed) به عنوان پشتیبان نهایی
-          var manifest = await yt.videos.streamsClient.getManifest(videoId);
-          var muxedStream = manifest.muxed.withHighestBitrate();
-          return muxedStream.url.toString();
-        } catch (finalError) {
-          debugPrint('🔴 خطای نهایی دریافت لینک استریم: $finalError');
-          rethrow;
-        }
-      }
+      debugPrint('🔴 خطا در استریم: $e');
+      rethrow;
     } finally {
       yt.close();
     }
@@ -223,16 +210,16 @@ class _MusicScreenState extends State<MusicScreen> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('در حال دریافت لینک زنده از یوتیوب موزیک...'), duration: Duration(seconds: 1)),
+          const SnackBar(content: Text('در حال اتصال به استریم امن...'), duration: Duration(seconds: 1)),
         );
 
-        String? freshUrl = await _getFreshStreamUrl(music.audioUrl);
-        if (freshUrl == null) {
-          throw Exception('لینک دریافت نشد (مقدار خالی است)');
+        String? proxyUrl = await _getFreshStreamUrl(music.audioUrl);
+        if (proxyUrl == null) {
+          throw Exception('لینک پروکسی دریافت نشد');
         }
 
         final AudioSource audioSource = AudioSource.uri(
-          Uri.parse(freshUrl),
+          Uri.parse(proxyUrl),
           headers: _headers,
         );
 
@@ -268,19 +255,18 @@ class _MusicScreenState extends State<MusicScreen> {
         const SnackBar(content: Text('در حال آماده‌سازی لینک دانلود...'), duration: Duration(seconds: 1)),
       );
 
-      String? freshUrl = await _getFreshStreamUrl(music.audioUrl);
-      if (freshUrl == null) {
+      String? proxyUrl = await _getFreshStreamUrl(music.audioUrl);
+      if (proxyUrl == null) {
         throw Exception('لینک دانلود نامعتبر است');
       }
 
       Directory? downloadsDir = await getExternalStorageDirectory();
-      
       String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]+'), '_');
       String savePath = "${downloadsDir?.path}/$safeTitle.mp3";
 
       Dio dio = Dio();
       await dio.download(
-        freshUrl,
+        proxyUrl,
         savePath,
         options: Options(headers: _headers),
         onReceiveProgress: (received, total) {
