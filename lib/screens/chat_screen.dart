@@ -235,7 +235,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     _cancelToken = CancelToken();
     try {
-      final response = await _geminiManager.sendMessage('فایل ارسال شد: $text');
+      final response = await _geminiManager.sendMessage(
+        'فایل ارسال شد: $text',
+        imageFile: File(path),
+      );
       if (mounted) {
         setState(() {
           _messages.add({'sender': 'namira', 'text': response, 'type': 'text', 'path': null});
@@ -260,6 +263,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _cancelToken = CancelToken();
 
     final imagePath = _selectedImage?.path;
+    final File? imageToSend = _selectedImage;
+
     setState(() {
       _messages.add({
         'sender': 'user',
@@ -275,7 +280,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollToBottom();
 
     try {
-      final response = await _geminiManager.sendMessage(text.isEmpty ? 'تصویر ارسال شد' : text);
+      final response = await _geminiManager.sendMessage(
+        text.isEmpty ? 'تصویر ارسال شد' : text,
+        imageFile: imageToSend,
+      );
       if (mounted) {
         setState(() {
           _messages.add({'sender': 'namira', 'text': response, 'type': 'text', 'path': null});
@@ -563,6 +571,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 padding: EdgeInsets.only(top: (msgType == 'image' && msgPath != null) ? 8.0 : 0),
                                 child: Text(
                                   msgText,
+                                  textDirection: TextDirection.rtl,
                                   style: TextStyle(
                                     color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
                                     fontSize: 15,
