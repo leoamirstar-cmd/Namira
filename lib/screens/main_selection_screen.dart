@@ -1,25 +1,34 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'chat_screen.dart';
 import 'music_screen.dart';
 
 class MainSelectionScreen extends StatelessWidget {
   final Function(bool) onToggleTheme;
   final Function(String) onChangeLanguage;
-  final VoidCallback onPickBackground; // تابع برای انتخاب عکس در main.dart
+  final Function(String) onSetBackground;
   final String currentLanguage;
   final bool isDarkMode;
-  final String? customBackgroundImage; // مسیر عکس پس‌زمینه دلخواه
+  final String? customBackgroundImage;
 
   const MainSelectionScreen({
     super.key,
     required this.onToggleTheme,
     required this.onChangeLanguage,
-    required this.onPickBackground,
+    required this.onSetBackground,
     required this.currentLanguage,
     required this.isDarkMode,
     this.customBackgroundImage,
   });
+
+  Future<void> _pickImage(BuildContext context) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      onSetBackground(image.path);
+    }
+  }
 
   void _showSettings(BuildContext context) {
     showModalBottomSheet(
@@ -79,11 +88,11 @@ class MainSelectionScreen extends StatelessWidget {
               const Divider(color: Colors.white12),
               ListTile(
                 leading: const Icon(Icons.wallpaper, color: Colors.purpleAccent),
-                title: Text(currentLanguage == 'fa' ? 'پس‌زمینه دلخواه' : 'Custom Background', style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.w600)),
-                trailing: const Icon(Icons.image_search_rounded, color: Colors.grey),
+                title: Text(currentLanguage == 'fa' ? 'انتخاب عکس پس‌زمینه' : 'Change Background', style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.w600)),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.pop(context);
-                  onPickBackground();
+                  _pickImage(context);
                 },
               ),
             ],
@@ -107,18 +116,9 @@ class MainSelectionScreen extends StatelessWidget {
                     image: FileImage(File(customBackgroundImage!)),
                     fit: BoxFit.cover,
                     colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(isDarkMode ? 0.6 : 0.2), 
+                      Colors.black.withOpacity(isDarkMode ? 0.5 : 0.1), 
                       BlendMode.darken
                     ),
-                  )
-                : null,
-            gradient: customBackgroundImage == null || customBackgroundImage!.isEmpty
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDarkMode 
-                      ? [const Color(0xFF0E1621), const Color(0xFF1F1135), const Color(0xFF111E38)]
-                      : [const Color(0xFFE0F7FA), const Color(0xFFFCE4EC), const Color(0xFFF3E5F5)],
                   )
                 : null,
           ),
@@ -198,9 +198,7 @@ class MainSelectionScreen extends StatelessWidget {
                             currentLanguage == 'fa' ? 'یک تجربه پرزرق‌وبرق و مدرن' : 'A vibrant & modern experience',
                             style: TextStyle(
                               fontSize: 14,
-                              color: isDarkMode 
-                                ? (customBackgroundImage != null ? Colors.white : Colors.white60) 
-                                : Colors.black87,
+                              color: isDarkMode ? Colors.white70 : Colors.black87,
                             ),
                           ),
                         ],
