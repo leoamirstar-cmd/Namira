@@ -174,7 +174,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // متد با قابلیت ثبت خطای دقیق
+  // متد با قابلیت دریافت امن و حالت پشتیبان (Fall-back)
   Future<String?> _getFreshStreamUrl(String videoId) async {
     final yt = YoutubeExplode();
     try {
@@ -182,8 +182,14 @@ class _MusicScreenState extends State<MusicScreen> {
       var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
       return audioStreamInfo.url.toString();
     } catch (e) {
-      debugPrint('🔴 خطای دقیق یوتیوب: $e');
-      rethrow; // خطا رو پرتاب می‌کنیم تا تو بخش catch اصلی نمایش داده بشه
+      try {
+        var manifest = await yt.videos.streamsClient.getManifest(videoId);
+        var fallbackStream = manifest.audioOnly.first;
+        return fallbackStream.url.toString();
+      } catch (innerError) {
+        debugPrint('🔴 خطای نهایی یوتیوب: $innerError');
+        rethrow;
+      }
     } finally {
       yt.close();
     }
