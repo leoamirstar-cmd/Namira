@@ -24,12 +24,10 @@ class _MusicScreenState extends State<MusicScreen> {
   bool _isLoading = false;
   
   final AudioPlayer _audioPlayer = AudioPlayer();
-  // به جای نگهداری لینک ثابت، حالا ویدیو آیدی (ID) را برای جلوگیری از انقضا نگه می‌داریم
   String? _currentlyPlayingVideoId;
   
   final Map<String, double> _downloadProgress = {};
 
-  // هدر استاندارد برای عبور از محدودیت‌های یوتیوب
   final Map<String, String> _headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   };
@@ -67,7 +65,7 @@ class _MusicScreenState extends State<MusicScreen> {
                 "music": MusicMessageModel(
                   title: item['title'] ?? 'موزیک',
                   author: item['author'] ?? 'یوتیوب موزیک',
-                  audioUrl: item['audioUrl'] ?? '', // ذخیره به عنوان آیدی ویدیو برای جلوگیری از انقضا
+                  audioUrl: item['audioUrl'] ?? '',
                   duration: item['duration'] ?? '00:00',
                   isDownloaded: false,
                 ),
@@ -113,7 +111,6 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // ۱. جستجوی بسیار سریع (بدون بار اضافی و دریافت مانفیست سنگین در مرحله اول)
   Future<void> _processMusicSearch(String fullInput) async {
     const prefix = 'پخش موزیک ';
     String query = fullInput.replaceFirst(prefix, '').trim();
@@ -145,7 +142,6 @@ class _MusicScreenState extends State<MusicScreen> {
           ? "${video.duration!.inMinutes.remainder(60).toString().padLeft(2, '0')}:${video.duration!.inSeconds.remainder(60).toString().padLeft(2, '0')}"
           : "03:30";
 
-      // در اینجا مقدار audioUrl را برابر با ID ویدیو قرار می‌دهیم تا بعداً در لحظه کلیک لینک تازه بگیریم
       MusicMessageModel musicModel = MusicMessageModel(
         title: video.title,
         author: video.author,
@@ -166,7 +162,7 @@ class _MusicScreenState extends State<MusicScreen> {
       setState(() {
         _chatItems.add({
           "type": "system",
-          "text": 'خطا در جستجو. مطمئن شوید فیلترشکن شما متصل است.',
+          "text": 'خطا در جستجو: $e',
         });
       });
       _saveHistory();
@@ -178,24 +174,21 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // متد کمکی برای گرفتن لینک کاملاً زنده در همان ثانیه کلیک
+  // متد با قابلیت ثبت خطای دقیق
   Future<String?> _getFreshStreamUrl(String videoId) async {
-  final yt = YoutubeExplode();
-  try {
-    var manifest = await yt.videos.streamsClient.getManifest(videoId);
-    // استفاده از first به جای withHighestBitrate برای پایداری بیشتر
-    var audioStreamInfo = manifest.audioOnly.first; 
-    return audioStreamInfo.url.toString();
-  } catch (e) {
-    // چاپ خطای دقیق در کنسول (برای اینکه ببینیم مشکل چیست)
-    debugPrint('🔴 خطای دقیق یوتیوب: $e');
-    return null;
-  } finally {
-    yt.close();
+    final yt = YoutubeExplode();
+    try {
+      var manifest = await yt.videos.streamsClient.getManifest(videoId);
+      var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
+      return audioStreamInfo.url.toString();
+    } catch (e) {
+      debugPrint('🔴 خطای دقیق یوتیوب: $e');
+      rethrow; // خطا رو پرتاب می‌کنیم تا تو بخش catch اصلی نمایش داده بشه
+    } finally {
+      yt.close();
+    }
   }
-}
 
-  // ۲. متد پخش موزیک همراه با گرفتن لینک زنده (بدون ارور انقضا)
   Future<void> _togglePlayPause(MusicMessageModel music) async {
     try {
       if (_currentlyPlayingVideoId == music.audioUrl && _audioPlayer.playing) {
@@ -204,15 +197,13 @@ class _MusicScreenState extends State<MusicScreen> {
           music.isPlaying = false;
         });
       } else {
-        // نمایش پیام کوتاه به کاربر که لینک در حال آماده‌سازی است
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('در حال دریافت لینک زنده پخش...'), duration: Duration(seconds: 1)),
         );
 
-        // گرفتن لینک تازه در همین ثانیه
         String? freshUrl = await _getFreshStreamUrl(music.audioUrl);
         if (freshUrl == null) {
-          throw Exception('لینک دریافت نشد');
+          throw Exception('لینک دریافت نشد (مقدار خالی است)');
         }
 
         final AudioSource audioSource = AudioSource.uri(
@@ -233,23 +224,25 @@ class _MusicScreenState extends State<MusicScreen> {
           music.isPlaying = true;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('خطا در پخش موزیک. فیلترشکن را بررسی کنید.')),
+          SnackBar(
+            content: Text('ارور دقیق: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 6),
+          ),
         );
       }
     }
   }
 
-  // ۳. متد دانلود مستقیم همراه با دریافت لینک زنده
   Future<void> _downloadMusic(MusicMessageModel music) async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('در حال آماده‌سازی لینک دانلود...'), duration: Duration(seconds: 1)),
       );
 
-      // گرفتن لینک تازه برای دانلود
       String? freshUrl = await _getFreshStreamUrl(music.audioUrl);
       if (freshUrl == null) {
         throw Exception('لینک دانلود نامعتبر است');
@@ -287,15 +280,16 @@ class _MusicScreenState extends State<MusicScreen> {
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _downloadProgress.remove(music.audioUrl);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('خطا در دانلود موزیک. فیلترشکن را بررسی کنید.'),
+          SnackBar(
+            content: Text('خطا در دانلود: $e'),
             backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 6),
           ),
         );
       }
