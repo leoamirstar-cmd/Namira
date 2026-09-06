@@ -18,9 +18,6 @@ class NamiraApp extends StatefulWidget {
 class _NamiraAppState extends State<NamiraApp> {
   ThemeMode _themeMode = ThemeMode.dark;
   String _language = 'fa';
-  
-  // لینک عکسی که فرستادی برای آپلود در گیت‌هاب (یا مسیر پیش‌فرض)
-  final String _githubDefaultBg = 'https://raw.githubusercontent.com/username/repository/main/images/9.jpeg';
   String? _customBackgroundImage;
 
   @override
@@ -35,8 +32,7 @@ class _NamiraAppState extends State<NamiraApp> {
       _language = prefs.getString('app_language') ?? 'fa';
       final isDark = prefs.getBool('is_dark_mode') ?? true;
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-      // اگر عکسی از طریق گیت‌هاب تنظیم نشده بود، از لینک گیت‌هاب یا پیش‌فرض استفاده کن
-      _customBackgroundImage = prefs.getString('custom_bg_image') ?? _githubDefaultBg;
+      _customBackgroundImage = prefs.getString('custom_bg_image');
     });
   }
 
@@ -56,12 +52,11 @@ class _NamiraAppState extends State<NamiraApp> {
     });
   }
 
-  // تنظیم لینک عکس گیت‌هاب برای پس‌زمینه اصلی
-  Future<void> _setGithubBackground(String url) async {
+  Future<void> _setBackgroundImage(String path) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('custom_bg_image', url);
+    await prefs.setString('custom_bg_image', path);
     setState(() {
-      _customBackgroundImage = url;
+      _customBackgroundImage = path;
     });
   }
 
@@ -71,7 +66,6 @@ class _NamiraAppState extends State<NamiraApp> {
       title: 'Namira Hub',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
-      // افزودن انیمیشن‌های نرم به تمام صفحات برای جلوگیری از خشکی حرکات
       theme: ThemeData(
         brightness: Brightness.light,
         primaryColor: const Color(0xFF2481CC),
@@ -99,7 +93,7 @@ class _NamiraAppState extends State<NamiraApp> {
       home: MainSelectionScreen(
         onToggleTheme: _toggleTheme,
         onChangeLanguage: _changeLanguage,
-        onSetGithubBg: _setGithubBackground,
+        onSetBackground: _setBackgroundImage,
         currentLanguage: _language,
         isDarkMode: _themeMode == ThemeMode.dark,
         customBackgroundImage: _customBackgroundImage,
