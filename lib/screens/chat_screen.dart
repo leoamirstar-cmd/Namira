@@ -20,8 +20,9 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final GeminiManager _geminiManager = GeminiManager();
 
   List<Map<String, dynamic>> _messages = [];
@@ -34,13 +35,39 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadChatHistoryKeys();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scrollToBottom(animated: false);
+    }
+  }
+
+  void _scrollToBottom({bool animated = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        if (animated) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        } else {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        }
+      }
+    });
   }
 
   Future<void> _loadChatHistoryKeys() async {
@@ -78,18 +105,16 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadMessages(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final rawData = prefs.getString(key);
-    if (rawData != null) {
-      final List decoded = jsonDecode(rawData);
-      setState(() {
-        _currentChatKey = key;
+    setState(() {
+      _currentChatKey = key;
+      if (rawData != null) {
+        final List decoded = jsonDecode(rawData);
         _messages = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      });
-    } else {
-      setState(() {
-        _currentChatKey = key;
+      } else {
         _messages = [];
-      });
-    }
+      }
+    });
+    _scrollToBottom(animated: false);
   }
 
   Future<void> _saveCurrentMessages() async {
@@ -206,6 +231,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _isLoading = true;
     });
     _saveCurrentMessages();
+    _scrollToBottom();
 
     _cancelToken = CancelToken();
     try {
@@ -216,6 +242,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _isLoading = false;
         });
         _saveCurrentMessages();
+        _scrollToBottom();
       }
     } catch (e) {
       if (mounted) {
@@ -245,6 +272,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
     _messageController.clear();
     _saveCurrentMessages();
+    _scrollToBottom();
 
     try {
       final response = await _geminiManager.sendMessage(text.isEmpty ? 'تصویر ارسال شد' : text);
@@ -254,6 +282,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _isLoading = false;
         });
         _saveCurrentMessages();
+        _scrollToBottom();
       }
     } catch (e) {
       if (mounted) {
@@ -375,7 +404,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       'آماده به خدمت',
                       style: TextStyle(fontSize: 11, color: Colors.greenAccent),
                     ),
-                    ],
+                  ],
                 ),
               ],
             ),
@@ -466,6 +495,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Expanded(
               child: ListView.builder(
+                controller: _scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
@@ -475,81 +505,94 @@ class _ChatScreenState extends State<ChatScreen> {
                   final msgType = msg['type'] ?? 'text';
                   final msgPath = msg['path'];
 
-                  return Align(
-                    alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-                      decoration: BoxDecoration(
-                        gradient: isUser 
-                            ? const LinearGradient(colors: [Colors.blueAccent, Colors.indigoAccent])
-                            : null,
-                        color: isUser 
-                            ? null 
-                            : (isDark ? const Color(0xFF1E293B) : Colors.white),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(20),
-                          topRight: const Radius.circular(20),
-                          bottomLeft: Radius.circular(isUser ? 20 : 4),
-                          bottomRight: Radius.circular(isUser ? 4 : 20),
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 250),
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: child,
                         ),
-                        border: !isUser && isDark ? Border.all(color: Colors.white10) : null,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (msgType == 'image' && msgPath != null)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(
-                                File(msgPath),
-                                height: 180,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
+                      );
+                    },
+                    child: Align(
+                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+                        decoration: BoxDecoration(
+                          gradient: isUser 
+                              ? const LinearGradient(colors: [Colors.blueAccent, Colors.indigoAccent])
+                              : null,
+                          color: isUser 
+                              ? null 
+                              : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
                             ),
-                          if (msgText.isNotEmpty)
-                            Padding(
-                              padding: EdgeInsets.only(top: (msgType == 'image' && msgPath != null) ? 8.0 : 0),
-                              child: Text(
-                                msgText,
-                                style: TextStyle(
-                                  color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                                  fontSize: 15,
-                                  height: 1.4,
+                          ],
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(20),
+                            topRight: const Radius.circular(20),
+                            bottomLeft: Radius.circular(isUser ? 20 : 4),
+                            bottomRight: Radius.circular(isUser ? 4 : 20),
+                          ),
+                          border: !isUser && isDark ? Border.all(color: Colors.white10) : null,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (msgType == 'image' && msgPath != null)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(msgPath),
+                                  height: 180,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                            ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              if (isUser)
-                                InkWell(
-                                  onTap: () => _editUserMessage(msgText),
-                                  child: const Icon(Icons.edit, size: 14, color: Colors.white70),
-                                )
-                              else
-                                InkWell(
-                                  onTap: () => _copyToClipboard(msgText),
-                                  child: Icon(
-                                    Icons.copy, 
-                                    size: 14, 
-                                    color: isDark ? Colors.white54 : Colors.black54,
+                            if (msgText.isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(top: (msgType == 'image' && msgPath != null) ? 8.0 : 0),
+                                child: Text(
+                                  msgText,
+                                  style: TextStyle(
+                                    color: isUser ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                                    fontSize: 15,
+                                    height: 1.4,
                                   ),
                                 ),
-                            ],
-                          ),
-                        ],
+                              ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (isUser)
+                                  InkWell(
+                                    onTap: () => _editUserMessage(msgText),
+                                    child: const Icon(Icons.edit, size: 14, color: Colors.white70),
+                                  )
+                                else
+                                  InkWell(
+                                    onTap: () => _copyToClipboard(msgText),
+                                    child: Icon(
+                                      Icons.copy, 
+                                      size: 14, 
+                                      color: isDark ? Colors.white54 : Colors.black54,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -571,7 +614,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1E293B) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
                 ),
                 child: Row(
                   children: [
