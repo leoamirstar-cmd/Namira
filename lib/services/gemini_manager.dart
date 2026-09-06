@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'proxy_helper.dart';
 
@@ -19,9 +20,28 @@ class GeminiManager {
     required String prompt,
     String? base64Media,
     String? mimeType,
+    File? imageFile,
     required CancelToken cancelToken,
   }) async {
     await ProxyHelper.setupProxy(_dio);
+
+    // پردازش اتوماتیک فایل تصویر در صورت ارسال شدن File
+    if (imageFile != null && imageFile.existsSync()) {
+      try {
+        List<int> imageBytes = await imageFile.readAsBytes();
+        base64Media = base64Encode(imageBytes);
+        
+        // تشخیص نوع فرمت عکس از روی پسوند فایل
+        String extension = imageFile.path.split('.').last.toLowerCase();
+        if (extension == 'png') {
+          mimeType = 'image/png';
+        } else if (extension == 'webp') {
+          mimeType = 'image/webp';
+        } else {
+          mimeType = 'image/jpeg';
+        }
+      } catch (_) {}
+    }
 
     dynamic userContent;
     if (base64Media != null && base64Media.isNotEmpty) {
@@ -104,11 +124,13 @@ class GeminiManager {
     String prompt, {
     String? base64Media,
     String? mimeType,
+    File? imageFile,
   }) async {
     return await sendPromptRacing(
       prompt: prompt,
       base64Media: base64Media,
       mimeType: mimeType,
+      imageFile: imageFile,
       cancelToken: CancelToken(),
     );
   }
