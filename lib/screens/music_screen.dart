@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/chat_models.dart';
 
 class MusicScreen extends StatefulWidget {
@@ -25,34 +26,13 @@ class _MusicScreenState extends State<MusicScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _currentlyPlayingUrl;
   
-  final String _serverBaseUrl = 'https://namira-music-api.leoamirstar.workers.dev';
-  String? _musicBackgroundImage;
+  final Map<String, double> _downloadProgress = {};
 
   @override
   void initState() {
     super.initState();
     _urlController = TextEditingController(text: 'پخش موزیک ');
-    _loadMusicPreferences();
     _loadHistory();
-  }
-
-  Future<void> _loadMusicPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _musicBackgroundImage = prefs.getString('music_bg_image');
-    });
-  }
-
-  Future<void> _pickMusicBackground() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('music_bg_image', image.path);
-      setState(() {
-        _musicBackgroundImage = image.path;
-      });
-    }
   }
 
   @override
@@ -65,7 +45,7 @@ class _MusicScreenState extends State<MusicScreen> {
   Future<void> _loadHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? historyString = prefs.getString('music_chat_history_v5');
+      final String? historyString = prefs.getString('music_chat_history_v6');
       if (historyString != null) {
         List<dynamic> decoded = jsonDecode(historyString);
         setState(() {
@@ -80,9 +60,9 @@ class _MusicScreenState extends State<MusicScreen> {
                 "type": "music",
                 "music": MusicMessageModel(
                   title: item['title'] ?? 'موزیک',
-                  author: item['author'] ?? 'نامیرا موزیک',
+                  author: item['author'] ?? 'یوتیوب موزیک',
                   audioUrl: item['audioUrl'] ?? '',
-                  duration: item['duration'] ?? '03:45',
+                  duration: item['duration'] ?? '00:00',
                   isDownloaded: false,
                 ),
               });
@@ -113,7 +93,7 @@ class _MusicScreenState extends State<MusicScreen> {
           });
         }
       }
-      await prefs.setString('music_chat_history_v5', jsonEncode(listToSave));
+      await prefs.setString('music_chat_history_v6', jsonEncode(listToSave));
     } catch (_) {}
   }
 
@@ -127,6 +107,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
+  // متد قدرتمند استخراج مستقیم موزیک از یوتیوب بدون نیاز به سرور
   Future<void> _processMusicSearch(String fullInput) async {
     const prefix = 'پخش موزیک ';
     String query = fullInput.replaceFirst(prefix, '').trim();
@@ -140,45 +121,35 @@ class _MusicScreenState extends State<MusicScreen> {
     });
     _saveHistory();
 
+    final yt = YoutubeExplode();
+
     try {
-      Dio dio = Dio();
-      var response = await dio.get(
-        '$_serverBaseUrl/search',
-        queryParameters: {'q': query},
-        options: Options(
-          receiveTimeout: const Duration(minutes: 1),
-          sendTimeout: const Duration(minutes: 1),
-        ),
-      );
-
-      String audioUrl = '';
-      String trackTitle = query;
-      String trackAuthor = 'نامیرا موزیک';
-      String trackDuration = '03:45';
-      
-      if (response.statusCode == 200 && response.data != null) {
-        audioUrl = response.data['url'] ?? '';
-        trackTitle = response.data['title'] ?? query;
-        trackAuthor = response.data['author'] ?? 'نامیرا موزیک';
-        trackDuration = response.data['duration'] ?? '03:45';
-      }
-
-      if (audioUrl.isEmpty) {
+      // ۱. جستجوی عنوان موزیک در یوتیوب
+      var searchResult = await yt.search.search(query);
+      if (searchResult.isEmpty) {
         setState(() {
-          _chatItems.add({
-            "type": "system",
-            "text": 'موزیک مورد نظر پیدا نشد!',
-          });
+          _chatItems.add({"type": "system", "text": 'موزیک مورد نظر در یوتیوب پیدا نشد!'});
         });
         _saveHistory();
         return;
       }
 
+      var video = searchResult.first;
+
+      // ۲. دریافت لینک مستقیم فایل صوتی با بالاترین بیت‌ریت
+      var manifest = await yt.videos.streamsClient.getManifest(video.id);
+      var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
+      String audioUrl = audioStreamInfo.url.toString();
+
+      String durationFormatted = video.duration != null
+          ? "${video.duration!.inMinutes.remainder(60).toString().padLeft(2, '0')}:${video.duration!.inSeconds.remainder(60).toString().padLeft(2, '0')}"
+          : "03:30";
+
       MusicMessageModel musicModel = MusicMessageModel(
-        title: trackTitle,
-        author: trackAuthor,
+        title: video.title,
+        author: video.author,
         audioUrl: audioUrl,
-        duration: trackDuration,
+        duration: durationFormatted,
         isDownloaded: false,
       );
 
@@ -190,29 +161,23 @@ class _MusicScreenState extends State<MusicScreen> {
       });
       _saveHistory();
 
-    } on DioException catch (e) {
-      String errorMessage = 'خطا در ارتباط با سرور موزیک';
-      if (e.response?.statusCode == 404) {
-        errorMessage = 'موزیک مورد نظر یافت نشد.';
-      } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
-        errorMessage = 'سرور در حال بیدار شدن است، لطفاً دوباره تلاش کنید.';
-      }
+    } catch (e) {
       setState(() {
-        _chatItems.add({"type": "system", "text": errorMessage});
-      });
-      _saveHistory();
-    } catch (_) {
-      setState(() {
-        _chatItems.add({"type": "system", "text": 'خطای غیرمنتظره‌ای رخ داد.'});
+        _chatItems.add({
+          "type": "system",
+          "text": 'خطا در دریافت موزیک. مطمئن شوید فیلترشکن شما متصل است.',
+        });
       });
       _saveHistory();
     } finally {
+      yt.close(); // بستن اتصال برای حفظ منابع حافظه
       setState(() {
         _isLoading = false;
       });
     }
   }
 
+  // متد پخش و توقف موزیک
   Future<void> _togglePlayPause(MusicMessageModel music) async {
     try {
       if (_currentlyPlayingUrl == music.audioUrl && _audioPlayer.playing) {
@@ -221,8 +186,17 @@ class _MusicScreenState extends State<MusicScreen> {
           music.isPlaying = false;
         });
       } else {
-        await _audioPlayer.setUrl(music.audioUrl);
+        // تنظیم منبع صوتی همراه با هدرهای استاندارد برای عبور از پروتکل‌های یوتیوب
+        final AudioSource audioSource = AudioSource.uri(
+          Uri.parse(music.audioUrl),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        );
+
+        await _audioPlayer.setAudioSource(audioSource);
         await _audioPlayer.play();
+
         setState(() {
           for (var item in _chatItems) {
             if (item["type"] == "music") {
@@ -234,18 +208,68 @@ class _MusicScreenState extends State<MusicScreen> {
         });
       }
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('خطا در پخش صوت')),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('خطا در پخش موزیک. فیلترشکن را بررسی کنید.')),
+        );
+      }
+    }
+  }
+
+  // متد دانلود مستقیم روی کارت موزیک
+  Future<void> _downloadMusic(MusicMessageModel music) async {
+    try {
+      Directory? downloadsDir = await getExternalStorageDirectory();
+      
+      // پاکسازی نام فایل از کاراکترهای غیرمجاز
+      String safeTitle = music.title.replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]+'), '_');
+      String savePath = "${downloadsDir?.path}/$safeTitle.mp3";
+
+      Dio dio = Dio();
+      await dio.download(
+        music.audioUrl,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            setState(() {
+              _downloadProgress[music.audioUrl] = received / total;
+            });
+          }
+        },
       );
+
+      setState(() {
+        music.isDownloaded = true;
+        _downloadProgress.remove(music.audioUrl);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('آهنگ با موفقیت ذخیره شد: $safeTitle'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('خطا در دانلود موزیک'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> searchHistory = _chatItems
-        .where((item) => item["type"] == "user")
-        .map((item) => item["text"].toString().replaceFirst('پخش موزیک ', ''))
-        .toSet()
+    List<MusicMessageModel> recentTracks = _chatItems
+        .where((item) => item["type"] == "music")
+        .map((item) => item["music"] as MusicMessageModel)
+        .toList()
+        .reversed
         .toList();
 
     return Directionality(
@@ -253,74 +277,79 @@ class _MusicScreenState extends State<MusicScreen> {
       child: Scaffold(
         appBar: AppBar(
           elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1DB954), Color(0xFF191414)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-          title: Row(
+          backgroundColor: const Color(0xFF0F172A),
+          title: const Row(
             children: [
-              const Icon(Icons.headphones_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              const Text('رادیو و استریم موزیک', style: TextStyle(color: Colors.white, fontSize: 15)),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.wallpaper_rounded, color: Colors.white),
-                tooltip: 'انتخاب عکس پس‌زمینه',
-                onPressed: _pickMusicBackground,
-              ),
-              if (searchHistory.isNotEmpty)
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.history_rounded, color: Colors.white),
-                  tooltip: 'تاریخچه جستجوها',
-                  onSelected: (String selectedQuery) {
-                    _processMusicSearch('پخش موزیک $selectedQuery');
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return searchHistory.map((String query) {
-                      return PopupMenuItem<String>(
-                        value: query,
-                        child: Row(
-                          children: [
-                            const Icon(Icons.search, size: 16, color: Colors.green),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                query,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList();
-                  },
-                ),
+              Icon(Icons.music_note_rounded, color: Colors.greenAccent),
+              SizedBox(width: 8),
+              Text('استریم و جستجوی موزیک', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.history_rounded, color: Colors.greenAccent),
+              tooltip: 'تاریخچه موزیک‌ها',
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+        drawer: Drawer(
+          backgroundColor: const Color(0xFF1E293B),
+          child: Column(
+            children: [
+              const DrawerHeader(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Colors.green, Color(0xFF0F172A)]),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.library_music_rounded, size: 48, color: Colors.white),
+                      SizedBox(height: 8),
+                      Text('آخرین موزیک‌های دریافتی', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: recentTracks.isEmpty
+                    ? const Center(child: Text('تاریخچه‌ای وجود ندارد', style: TextStyle(color: Colors.white54)))
+                    : ListView.builder(
+                        itemCount: recentTracks.length,
+                        itemBuilder: (context, index) {
+                          final track = recentTracks[index];
+                          return ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: Colors.green,
+                              child: Icon(Icons.play_arrow_rounded, color: Colors.white),
+                            ),
+                            title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: Text(track.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _togglePlayPause(track);
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
         ),
         body: Container(
-          decoration: BoxDecoration(
-            color: widget.isDarkMode ? const Color(0xFF0E1621) : const Color(0xFFF8F9FA),
-            image: _musicBackgroundImage != null && _musicBackgroundImage!.isNotEmpty
-                ? DecorationImage(
-                    image: FileImage(File(_musicBackgroundImage!)),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withOpacity(widget.isDarkMode ? 0.65 : 0.2),
-                      BlendMode.darken,
-                    ),
-                  )
-                : null,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0F172A), Color(0xFF020617)],
+            ),
           ),
           child: Column(
             children: [
@@ -331,23 +360,16 @@ class _MusicScreenState extends State<MusicScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(24),
+                              padding: const EdgeInsets.all(28),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [Colors.green.withOpacity(0.2), Colors.black.withOpacity(0.2)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
+                                color: Colors.green.withOpacity(0.1),
+                                border: Border.all(color: Colors.green.withOpacity(0.3), width: 2),
                               ),
-                              child: const Icon(Icons.radio_rounded, size: 64, color: Colors.green),
+                              child: const Icon(Icons.headphones_rounded, size: 64, color: Colors.greenAccent),
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'تاریخچه خالی است. نام موزیک را جستجو کنید!',
-                              style: TextStyle(fontSize: 14, color: widget.isDarkMode ? Colors.white70 : Colors.black54),
-                              textAlign: TextAlign.center,
-                            ),
+                            const SizedBox(height: 20),
+                            const Text('اسم موزیک یا خواننده را بنویسید', style: TextStyle(fontSize: 15, color: Colors.white70)),
                           ],
                         ),
                       )
@@ -356,134 +378,153 @@ class _MusicScreenState extends State<MusicScreen> {
                         itemCount: _chatItems.length,
                         itemBuilder: (context, index) {
                           var item = _chatItems[index];
-                          
-                          return TweenAnimationBuilder<double>(
-                            tween: Tween<double>(begin: 0.0, end: 1.0),
-                            duration: const Duration(milliseconds: 250),
-                            builder: (context, value, child) {
-                              return Transform.translate(
-                                offset: Offset(0, 15 * (1 - value)),
-                                child: Opacity(opacity: value, child: child),
-                              );
-                            },
-                            child: item["type"] == "user"
-                                ? Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(vertical: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green.shade700,
-                                        borderRadius: BorderRadius.circular(16),
+
+                          if (item["type"] == "user") {
+                            return Align(
+                              alignment: Alignment.centerRight,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade800,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 13)),
+                              ),
+                            );
+                          } else if (item["type"] == "system") {
+                            return Center(
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(item["text"], style: const TextStyle(color: Colors.white70, fontSize: 12), textAlign: TextAlign.center),
+                              ),
+                            );
+                          } else {
+                            MusicMessageModel music = item["music"];
+                            double? progress = _downloadProgress[music.audioUrl];
+
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                width: MediaQuery.of(context).size.width * 0.88,
+                                margin: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1E293B),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(14.0),
+                                      child: Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _togglePlayPause(music),
+                                            child: Container(
+                                              width: 52,
+                                              height: 52,
+                                              decoration: const BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: LinearGradient(colors: [Colors.green, Colors.teal]),
+                                              ),
+                                              child: Icon(
+                                                music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                color: Colors.white,
+                                                size: 32,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(music.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
+                                                const SizedBox(height: 4),
+                                                Text(music.author, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.white60)),
+                                              ],
+                                            ),
+                                          ),
+                                          Text(music.duration, style: const TextStyle(fontSize: 11, color: Colors.greenAccent)),
+                                        ],
                                       ),
-                                      child: Text(item["text"], style: const TextStyle(color: Colors.white, fontSize: 13), textDirection: TextDirection.ltr),
                                     ),
-                                  )
-                                : item["type"] == "system"
-                                    ? Center(
-                                        child: Container(
-                                          margin: const EdgeInsets.symmetric(vertical: 8),
-                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(item["text"], style: TextStyle(color: widget.isDarkMode ? Colors.white60 : Colors.black54, fontSize: 13), textAlign: TextAlign.center),
-                                        ),
-                                      )
-                                    : Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Container(
-                                          width: MediaQuery.of(context).size.width * 0.85,
-                                          margin: const EdgeInsets.symmetric(vertical: 8),
-                                          padding: const EdgeInsets.all(14),
-                                          decoration: BoxDecoration(
-                                            color: widget.isDarkMode ? const Color(0xFF182533) : Colors.white,
-                                            borderRadius: BorderRadius.circular(18),
-                                            boxShadow: [
-                                              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3)),
-                                            ],
-                                            border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              GestureDetector(
-                                                onTap: () => _togglePlayPause(item["music"]),
-                                                child: Container(
-                                                  width: 50,
-                                                  height: 50,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    color: Colors.green,
-                                                    boxShadow: [
-                                                      BoxShadow(color: Colors.green.withOpacity(0.4), blurRadius: 8, spreadRadius: 2),
-                                                    ],
-                                                  ),
-                                                  child: Icon(
-                                                    (item["music"] as MusicMessageModel).isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                                    color: Colors.white,
-                                                    size: 28,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 14),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      (item["music"] as MusicMessageModel).title,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: widget.isDarkMode ? Colors.white : Colors.black87),
-                                                    ),
-                                                    const SizedBox(height: 3),
-                                                    Text(
-                                                      (item["music"] as MusicMessageModel).author,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: TextStyle(fontSize: 11, color: widget.isDarkMode ? Colors.white60 : Colors.black54),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text((item["music"] as MusicMessageModel).duration, style: const TextStyle(fontSize: 11, color: Colors.green)),
-                                                  ],
-                                                ),
-                                              ),
-                                              const Icon(Icons.stream_rounded, color: Colors.green, size: 24),
-                                            ],
-                                          ),
+                                    // نوار پایینی جهت دانلود اختصاصی موزیک
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.only(
+                                          bottomLeft: Radius.circular(20),
+                                          bottomRight: Radius.circular(20),
                                         ),
                                       ),
-                          );
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          if (progress != null)
+                                            Expanded(
+                                              child: LinearProgressIndicator(value: progress, color: Colors.greenAccent, backgroundColor: Colors.white10),
+                                            )
+                                          else
+                                            Text(
+                                              music.isDownloaded ? 'ذخیره شده در حافظه' : 'ذخیره در حافظه گوشی',
+                                              style: TextStyle(fontSize: 11, color: music.isDownloaded ? Colors.greenAccent : Colors.white54),
+                                            ),
+                                          IconButton(
+                                            icon: Icon(
+                                              music.isDownloaded ? Icons.check_circle_rounded : Icons.download_rounded,
+                                              color: music.isDownloaded ? Colors.greenAccent : Colors.white70,
+                                              size: 20,
+                                            ),
+                                            onPressed: music.isDownloaded || progress != null ? null : () => _downloadMusic(music),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
                         },
                       ),
               ),
-              if (_isLoading) const LinearProgressIndicator(color: Colors.green),
+              if (_isLoading) const LinearProgressIndicator(color: Colors.greenAccent, backgroundColor: Colors.transparent),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                color: widget.isDarkMode ? const Color(0xFF17212B) : Colors.white,
+                padding: const EdgeInsets.all(12),
+                color: const Color(0xFF1E293B),
                 child: Row(
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _urlController,
                         onChanged: (val) => _onTextChanged(),
-                        style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
-                        textDirection: TextDirection.ltr,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'نام آهنگ یا خواننده...',
+                          hintStyle: const TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                         ),
                         onSubmitted: (val) => _processMusicSearch(val),
                       ),
                     ),
-                    Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.green,
-                      ),
+                    const SizedBox(width: 8),
+                    CircleAvatar(
+                      backgroundColor: Colors.green,
+                      radius: 22,
                       child: IconButton(
-                        icon: const Icon(Icons.send_rounded, color: Colors.white),
+                        icon: const Icon(Icons.search_rounded, color: Colors.white),
                         onPressed: () => _processMusicSearch(_urlController.text),
                       ),
                     ),
