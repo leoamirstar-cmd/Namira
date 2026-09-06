@@ -111,6 +111,7 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
+  // جستجوی هوشمند به سبک YouTube Music با چسباندن کلیدواژه رسمی
   Future<void> _processMusicSearch(String fullInput) async {
     const prefix = 'پخش موزیک ';
     String query = fullInput.replaceFirst(prefix, '').trim();
@@ -127,10 +128,18 @@ class _MusicScreenState extends State<MusicScreen> {
     final yt = YoutubeExplode();
 
     try {
-      var searchList = await yt.search.getVideos(query);
+      // بهینه‌سازی کوئری برای پیدا کردن بهترین نتیجه صوتی (YouTube Music style)
+      String optimizedQuery = "$query official audio topic";
+      var searchList = await yt.search.getVideos(optimizedQuery);
+      
+      if (searchList.isEmpty) {
+        // اگر با کوئری تخصصی پیدا نشد، جستجوی ساده‌ی معمولی انجام بده
+        searchList = await yt.search.getVideos(query);
+      }
+
       if (searchList.isEmpty) {
         setState(() {
-          _chatItems.add({"type": "system", "text": 'موزیک مورد نظر در یوتیوب پیدا نشد!'});
+          _chatItems.add({"type": "system", "text": 'موزیک مورد نظر در یوتیوب موزیک پیدا نشد!'});
         });
         _saveHistory();
         return;
@@ -174,21 +183,31 @@ class _MusicScreenState extends State<MusicScreen> {
     }
   }
 
-  // متد با قابلیت دریافت امن و حالت پشتیبان (Fall-back)
+  // متد استخراج لینک با مکانیزم چندلایه برای جلوگیری از خطای پلیر
   Future<String?> _getFreshStreamUrl(String videoId) async {
     final yt = YoutubeExplode();
     try {
       var manifest = await yt.videos.streamsClient.getManifest(videoId);
+      
+      // اولویت اول: استریم صوتی با بالاترین کیفیت
       var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
       return audioStreamInfo.url.toString();
     } catch (e) {
       try {
+        // اولویت دوم: اولین استریم صوتی موجود
         var manifest = await yt.videos.streamsClient.getManifest(videoId);
         var fallbackStream = manifest.audioOnly.first;
         return fallbackStream.url.toString();
       } catch (innerError) {
-        debugPrint('🔴 خطای نهایی یوتیوب: $innerError');
-        rethrow;
+        try {
+          // اولویت سوم: استریم ترکیبی (Muxed) به عنوان پشتیبان نهایی
+          var manifest = await yt.videos.streamsClient.getManifest(videoId);
+          var muxedStream = manifest.muxed.withHighestBitrate();
+          return muxedStream.url.toString();
+        } catch (finalError) {
+          debugPrint('🔴 خطای نهایی دریافت لینک استریم: $finalError');
+          rethrow;
+        }
       }
     } finally {
       yt.close();
@@ -204,7 +223,7 @@ class _MusicScreenState extends State<MusicScreen> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('در حال دریافت لینک زنده پخش...'), duration: Duration(seconds: 1)),
+          const SnackBar(content: Text('در حال دریافت لینک زنده از یوتیوب موزیک...'), duration: Duration(seconds: 1)),
         );
 
         String? freshUrl = await _getFreshStreamUrl(music.audioUrl);
@@ -321,7 +340,7 @@ class _MusicScreenState extends State<MusicScreen> {
             children: [
               Icon(Icons.music_note_rounded, color: Colors.greenAccent),
               SizedBox(width: 8),
-              Text('استریم و جستجوی موزیک', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('یوتیوب موزیک (استریم هوشمند)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
           leading: Builder(
