@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'chat_screen.dart';
 import 'music_screen.dart';
-import 'backgammon/backgammon_screen.dart'; // تنظیم مسیر پوشه backgammon
+import 'package:namira/games/backgammon_screen.dart';
 
 class MainSelectionScreen extends StatelessWidget {
   final Function(bool) onToggleTheme;
