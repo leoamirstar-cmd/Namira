@@ -102,6 +102,53 @@ class MainSelectionScreen extends StatelessWidget {
     );
   }
 
+  // منوی انتخاب بازی‌ها (تخته‌نرد و...)
+  void _showGamesMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                currentLanguage == 'fa' ? 'بازی‌های دورهمی' : 'Party Games',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.casino_rounded, color: Color(0xFF00E676), size: 32),
+                title: Text(
+                  currentLanguage == 'fa' ? 'تخته نرد (سه‌بعدی آفلاین)' : 'Backgammon (3D Offline)',
+                  style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  currentLanguage == 'fa' ? 'بازی با هوش مصنوعی گوشی' : 'Play against AI',
+                  style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                onTap: () {
+                  Navigator.pop(context);
+                  // اینجا صفحه بازی تخته‌نرد را در آینده صدا می‌زنیم
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -246,6 +293,15 @@ class MainSelectionScreen extends StatelessWidget {
                                 ),
                               );
                             },
+                          ),
+                          // کارت سوم: بازی‌های دورهمی (تخته نرد)
+                          _buildGridCard(
+                            context,
+                            title: currentLanguage == 'fa' ? 'بازی‌های دورهمی' : 'Party Games',
+                            subtitle: currentLanguage == 'fa' ? 'تخته‌نرد سه‌بعدی آفلاین' : '3D Backgammon',
+                            icon: Icons.casino_rounded,
+                            gradientColors: [const Color(0xFF00E676), const Color(0xFF10B981)],
+                            onTap: () => _showGamesMenu(context),
                           ),
                         ],
                       ),
