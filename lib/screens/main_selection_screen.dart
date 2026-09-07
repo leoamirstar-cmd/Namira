@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'chat_screen.dart';
 import 'music_screen.dart';
+import 'package:namira/games/backgammon_screen.dart'; // ایمپورت صفحه تخته‌نرد
 
 class MainSelectionScreen extends StatelessWidget {
   final Function(bool) onToggleTheme;
@@ -139,7 +140,13 @@ class MainSelectionScreen extends StatelessWidget {
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.pop(context);
-                  // اینجا صفحه بازی تخته‌نرد را در آینده صدا می‌زنیم
+                  // هدایت به صفحه بازی تخته‌نرد
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BackgammonGameScreen(),
+                    ),
+                  );
                 },
               ),
             ],
