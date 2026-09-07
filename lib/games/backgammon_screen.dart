@@ -10,13 +10,16 @@ class BackgammonGameScreen extends StatefulWidget {
 
 class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
   // وضعیت ۲۴ خانه تخته نرد (تعداد مهره و رنگ: مثبت برای سفید، منفی برای سیاه)
-  // خانه‌ها از دید بازیکن سفید از ۱ تا ۲۴ شماره‌گذاری می‌شوند.
+  // خانه‌ها از دید بازیکن سفید از 0 تا 23 (نمایش ۱ تا ۲۴) شماره‌گذاری می‌شوند.
   final List<int> _board = List.filled(24, 0);
 
-  // تاس‌ها
+  // تاس‌ها و باقی‌مانده‌ی تاس‌های قابل استفاده در این نوبت
   int? _dice1;
   int? _dice2;
-  bool _isWhiteTurn = true; // نوبت بازیکن سفید
+  List<int> _availableDice = [];
+  
+  bool _isWhiteTurn = true; // نوبت بازیکن سفید (true مخفف سفید، false مخفف سیاه)
+  int? _selectedSourceIndex; // خانه‌ای که بازیکن برای حرکت مهره انتخاب کرده است
   String _gameMessage = "برای شروع تاس بریزید";
 
   @override
@@ -27,7 +30,10 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
 
   // چیدمان اولیه استاندارد تخته نرد
   void _initializeBoard() {
-    // سفید
+    // پاکسازی کامل تخته
+    _board.fillRange(0, 24, 0);
+
+    // سفید (با اعداد مثبت)
     _board[0] = 2;   // خانه 1
     _board[11] = 5;  // خانه 12
     _board[16] = 3;  // خانه 17
@@ -40,7 +46,12 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
     _board[5] = -5;  // خانه 6
 
     setState(() {
-      _gameMessage = "بازی شروع شد. نوبت بازیکن سفید است.";
+      _isWhiteTurn = true;
+      _dice1 = null;
+      _dice2 = null;
+      _availableDice.clear();
+      _selectedSourceIndex = null;
+      _gameMessage = "بازی شروع شد. نوبت بازیکن سفید است. تاس بریزید.";
     });
   }
 
@@ -51,11 +62,108 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
       _dice1 = random.nextInt(6) + 1;
       _dice2 = random.nextInt(6) + 1;
       
-      // اگر تاس‌ها جفت باشند، 4 حرکت داریم (در منطق کامل پیاده می‌شود)
+      _availableDice = [_dice1!, _dice2!];
+      // اگر تاس‌ها جفت باشند، 4 حرکت مشابه داریم
       if (_dice1 == _dice2) {
-        _gameMessage = "تاس جفت آمد! ($_dice1 - $_dice1). چهار حرکت دارید.";
+        _availableDice.add(_dice1!);
+        _availableDice.add(_dice1!);
+        _gameMessage = "تاس جفت آمد! ($_dice1 - $_dice1). ۴ حرکت دارید. مهره‌ای را انتخاب کنید.";
       } else {
-        _gameMessage = "تاس‌ها: $_dice1 و $_dice2. نوبت ${_isWhiteTurn ? 'سفید' : 'سیاه'}.";
+        _gameMessage = "تاس‌ها: $_dice1 و $_dice2. نوبت ${_isWhiteTurn ? 'سفید' : 'سیاه'}. مهره‌ای را انتخاب کنید.";
+      }
+      _selectedSourceIndex = null;
+    });
+  }
+
+  // مدیریت کلیک روی خانه‌های تخته برای حرکت مهره‌ها
+  void _onBoardSquareTap(int actualIndex) {
+    // اگر هنوز تاس نریخته‌اند، اجازه حرکت نیست
+    if (_availableDice.isEmpty) {
+      setState(() {
+        _gameMessage = "ابتدا باید تاس بریزید!";
+      });
+      return;
+    }
+
+    setState(() {
+      // حالت اول: هنوز مهره‌ای برای حرکت انتخاب نکرده‌ایم
+      if (_selectedSourceIndex == null) {
+        int checker = _board[actualIndex];
+        // بررسی اینکه آیا بازیکن روی مهره‌ی خودش کلیک کرده است یا خیر
+        bool isValidSelection = _isWhiteTurn ? (checker > 0) : (checker < 0);
+
+        if (isValidSelection) {
+          _selectedSourceIndex = actualIndex;
+          _gameMessage = "خانه ${actualIndex + 1} انتخاب شد. حالا خانه مقصد را انتخاب کنید.";
+        } else {
+          _gameMessage = "این مهره متعلق به شما نیست یا این خانه خالی است!";
+        }
+      } 
+      // حالت دوم: مهره انتخاب شده است و حالا داریم مقصد را انتخاب می‌کنیم
+      else {
+        int source = _selectedSourceIndex!;
+        
+        // اگر روی همان خانه قبلی دوباره کلیک کند، انتخاب لغو می‌شود
+        if (source == actualIndex) {
+          _selectedSourceIndex = null;
+          _gameMessage = "انتخاب لغو شد.";
+          return;
+        }
+
+        // محاسبه فاصله (تعداد خانه‌های جابجایی) بر اساس جهت حرکت بازیکن
+        // سفید از خانه 0 به سمت 23 حرکت می‌کند، سیاه برعکس از 23 به سمت 0
+        int distance = _isWhiteTurn ? (actualIndex - source) : (source - actualIndex);
+
+        if (distance <= 0) {
+          _gameMessage = "جهت حرکت نامعتبر است!";
+          _selectedSourceIndex = null;
+          return;
+        }
+
+        // بررسی اینکه آیا تاس متناسب با این فاصله در دست داریم یا خیر
+        if (_availableDice.contains(distance)) {
+          // بررسی قوانین ساده مقصد (مانع نشدن مهره حریف - اگر تعداد مهره حریف بیشتر از 1 باشد نمی‌توان نشست)
+          int destinationVal = _board[actualIndex];
+          bool canLand = _isWhiteTurn ? (destinationVal >= -1) : (destinationVal <= 1);
+
+          if (canLand) {
+            // اعمال حرکت روی آرایه تخته
+            if (_isWhiteTurn) {
+              _board[source] -= 1;
+              if (destinationVal == -1) {
+                // زدن مهره سیاه و فرستادن به بیرون (حالت ساده)
+                _board[actualIndex] = 1;
+              } else {
+                _board[actualIndex] += 1;
+              }
+            } else {
+              _board[source] += 1;
+              if (destinationVal == 1) {
+                // زدن مهره سفید
+                _board[actualIndex] = -1;
+              } else {
+                _board[actualIndex] -= 1;
+              }
+            }
+
+            // مصرف کردن تاس استفاده شده
+            _availableDice.remove(distance);
+            _selectedSourceIndex = null;
+
+            // بررسی اتمام تاس‌های این نوبت
+            if (_availableDice.isEmpty) {
+              _endTurn();
+            } else {
+              _gameMessage = "حرکت با موفقیت انجام شد. تاس‌های باقیمانده: $_availableDice. مهره بعدی را انتخاب کنید.";
+            }
+          } else {
+            _gameMessage = "این خانه بسته است (مهره حریف زیاد است)! مقصد دیگری انتخاب کنید.";
+            _selectedSourceIndex = null;
+          }
+        } else {
+          _gameMessage = "فاصله انتخابی با مقدار تاس‌های باقیمانده ($_availableDice) همخوانی ندارد!";
+          _selectedSourceIndex = null;
+        }
       }
     });
   }
@@ -66,7 +174,9 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
       _isWhiteTurn = !_isWhiteTurn;
       _dice1 = null;
       _dice2 = null;
-      _gameMessage = "نوبت تغییر کرد. نوبت ${_isWhiteTurn ? 'سفید' : 'سیاه'} است.";
+      _availableDice.clear();
+      _selectedSourceIndex = null;
+      _gameMessage = "نوبت تغییر کرد. نوبت ${_isWhiteTurn ? 'سفید (پایین/راست)' : 'سیاه (بالا)'} است. تاس بریزید.";
     });
   }
 
@@ -77,6 +187,13 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
       appBar: AppBar(
         title: const Text('تخته نرد - نامیرا'),
         backgroundColor: const Color(0xFF5D4037),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _initializeBoard,
+            tooltip: 'شروع مجدد بازی',
+          )
+        ],
       ),
       body: Column(
         children: [
@@ -87,24 +204,30 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  _gameMessage,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                Expanded(
+                  child: Text(
+                    _gameMessage,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Row(
                   children: [
                     if (_dice1 != null && _dice2 != null) ...[
-                      Chip(label: Text('$_dice1')),
-                      const SizedBox(width: 8),
-                      Chip(label: Text('$_dice2')),
+                      Chip(label: Text('$_dice1', style: const TextStyle(fontWeight: FontWeight.bold))),
+                      const SizedBox(width: 4),
+                      Chip(label: Text('$_dice2', style: const TextStyle(fontWeight: FontWeight.bold))),
                     ],
                     const SizedBox(width: 8),
                     ElevatedButton(
-                      onPressed: (_dice1 == null) ? _rollDice : _endTurn,
+                      onPressed: (_availableDice.isEmpty) ? _rollDice : _endTurn,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.amber[800],
+                        foregroundColor: Colors.white,
                       ),
-                      child: Text(_dice1 == null ? 'تاس بریز' : 'پایان نوبت'),
+                      child: Text(_availableDice.isEmpty ? 'تاس بریز' : 'پایان نوبت'),
                     ),
                   ],
                 ),
@@ -170,7 +293,7 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
     );
   }
 
-  // ویجت کمکی برای ساختن نیمه‌ای از خانه‌های تخته
+  // ویجت کمکی برای ساختن نیمه‌ای از خانه‌های تخته با قابلیت تشخیص انتخاب‌شده‌ها
   Widget _buildBoardHalf(int startIndex, int endIndex, bool isTop) {
     return Expanded(
       child: Row(
@@ -178,19 +301,18 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
         children: List.generate((endIndex - startIndex) + 1, (index) {
           int actualIndex = isTop ? (endIndex - index) : (startIndex + index);
           int checkersCount = _board[actualIndex];
+          bool isSelected = _selectedSourceIndex == actualIndex;
 
           return Expanded(
             child: GestureDetector(
-              onTap: () {
-                // کلیک روی خانه برای انتخاب و حرکت مهره
-                setState(() {
-                  _gameMessage = "انتخاب خانه ${actualIndex + 1} (مهره‌ها: $checkersCount)";
-                });
-              },
+              onTap: () => _onBoardSquareTap(actualIndex),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: actualIndex % 2 == 0 ? const Color(0xFFBCAAA4) : const Color(0xFF8D6E63),
+                  color: isSelected 
+                      ? Colors.amber.withOpacity(0.6) // اگر این خانه انتخاب شده باشد رنگش فرق می‌کند
+                      : (actualIndex % 2 == 0 ? const Color(0xFFBCAAA4) : const Color(0xFF8D6E63)),
+                  border: isSelected ? Border.all(color: Colors.amber, width: 2) : null,
                 ),
                 child: Column(
                   mainAxisAlignment: isTop ? MainAxisAlignment.start : MainAxisAlignment.end,
@@ -207,7 +329,10 @@ class _BackgammonGameScreenState extends State<BackgammonGameScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: checkersCount > 0 ? Colors.white : Colors.black87,
-                          border: Border.all(color: Colors.grey, width: 1),
+                          border: Border.all(
+                            color: isSelected ? Colors.amberAccent : Colors.grey, 
+                            width: isSelected ? 2 : 1,
+                          ),
                         ),
                         child: Text(
                           '${checkersCount.abs()}',
