@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'chat_screen.dart';
 import 'music_screen.dart';
-import 'package:namira/games/backgammon_screen.dart'; // ایمپورت صفحه تخته‌نرد
+import 'backgammon/backgammon_screen.dart'; // تنظیم مسیر پوشه backgammon
 
 class MainSelectionScreen extends StatelessWidget {
   final Function(bool) onToggleTheme;
@@ -103,7 +103,7 @@ class MainSelectionScreen extends StatelessWidget {
     );
   }
 
-  // منوی انتخاب بازی‌ها (تخته‌نرد و...)
+  // منوی انتخاب بازی‌ها
   void _showGamesMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -130,21 +130,20 @@ class MainSelectionScreen extends StatelessWidget {
               ListTile(
                 leading: const Icon(Icons.casino_rounded, color: Color(0xFF00E676), size: 32),
                 title: Text(
-                  currentLanguage == 'fa' ? 'تخته نرد (سه‌بعدی آفلاین)' : 'Backgammon (3D Offline)',
+                  currentLanguage == 'fa' ? 'تخته نرد (آفلاین)' : 'Backgammon (Offline)',
                   style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
-                  currentLanguage == 'fa' ? 'بازی با هوش مصنوعی گوشی' : 'Play against AI',
+                  currentLanguage == 'fa' ? 'بازی دو نفره' : 'Play backgammon',
                   style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 12),
                 ),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                 onTap: () {
                   Navigator.pop(context);
-                  // هدایت به صفحه بازی تخته‌نرد
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const BackgammonGameScreen(),
+                      builder: (context) => const BackgammonScreen(),
                     ),
                   );
                 },
@@ -301,11 +300,10 @@ class MainSelectionScreen extends StatelessWidget {
                               );
                             },
                           ),
-                          // کارت سوم: بازی‌های دورهمی (تخته نرد)
                           _buildGridCard(
                             context,
                             title: currentLanguage == 'fa' ? 'بازی‌های دورهمی' : 'Party Games',
-                            subtitle: currentLanguage == 'fa' ? 'تخته‌نرد سه‌بعدی آفلاین' : '3D Backgammon',
+                            subtitle: currentLanguage == 'fa' ? 'تخته‌نرد آفلاین' : 'Backgammon',
                             icon: Icons.casino_rounded,
                             gradientColors: [const Color(0xFF00E676), const Color(0xFF10B981)],
                             onTap: () => _showGamesMenu(context),
