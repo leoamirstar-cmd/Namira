@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/main_selection_screen.dart';
+import 'package:namira/games/backgammon_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
